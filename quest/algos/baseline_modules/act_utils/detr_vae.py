@@ -142,7 +142,7 @@ class DETRVAE(nn.Module):
         query_embed = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)
         input_pos_embed = self.additional_pos_embed.weight.unsqueeze(1).repeat(1, bs, 1)
 
-        hs = self.transformer(transformer_input, None, query_embed, input_pos_embed)[0]
+        hs = self.transformer(transformer_input, None, query_embed, input_pos_embed)[-1] # Originally, the index is 0.
 
         a_hat = self.action_head(hs)
         is_pad_hat = self.is_pad_head(hs)
