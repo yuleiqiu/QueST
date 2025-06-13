@@ -42,18 +42,24 @@ class LiberoRunner():
         successes, per_env_any_success, rewards = [], [], []
         per_env_success_rates, per_env_rewards = {}, {}
         videos = {}
-        for env_name in tqdm(env_names, disable=not do_tqdm):
+        # show outer progress only if multiple envs; for single-task hide it
+        outer_disable = not do_tqdm or len(env_names) <= 1
+        for env_name in tqdm(env_names, disable=outer_disable):
 
             any_success = False
             env_succs, env_rews, env_video = [], [], []
             rollouts = self.run_policy_in_env(env_name, policy, render=n_video > 0)
+            # progress bar for individual rollouts per environment
+            pb = tqdm(total=self.rollouts_per_env, disable=not do_tqdm,
+                      desc=f"rollouts/{env_name}")
             for i, (success, total_reward, episode) in enumerate(rollouts):
+                pb.update(1)
                 any_success = any_success or success
                 successes.append(success)
                 env_succs.append(success)
                 env_rews.append(total_reward)
                 rewards.append(total_reward)
-
+                # save only the first n_video episodes
                 if i < n_video:
                     if save_video_fn is not None:
                         video_hwc = np.array(episode['render'])
@@ -61,7 +67,9 @@ class LiberoRunner():
                         save_video_fn(video_chw, env_name, i)
                     else:
                         env_video.extend(episode['render'])
-                    
+            # close rollout progress bar
+            pb.close()
+             
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
             per_env_any_success.append(any_success)
@@ -86,6 +94,10 @@ class LiberoRunner():
 
             output['rollout_videos'][env_name] = videos[env_name]
         
+        # add individual rollout successes and rewards lists (cast to Python types for JSON)
+        output['rollout']['successes'] = [bool(s) for s in successes]
+        output['rollout']['rewards'] = [float(r) for r in rewards]
+
         return output
 
     def run_policy_in_env(self, env_name, policy, render=False):
@@ -275,4 +287,5 @@ class LiberoSingleTaskRunner(LiberoRunner):
         for key, value in episode.items():
             episode[key] = np.array(value)
 
+        episode = {key: np.array(value) for key, value in episode.items()}
         return success, total_reward, episode

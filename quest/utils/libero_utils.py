@@ -58,9 +58,17 @@ class LiberoVectorWrapper(gymnasium.Env):
         self.observation_space = batch_space(self._env.observation_space[0], env_num)
 
     def reset(self, init_states, *args, **kwargs):
-        obs, info = self._env.reset(*args, **kwargs)
-        obs = self.process_obs(obs)
+        # initial reset
+        self._env.reset(*args, **kwargs)
+        # apply provided init states
         self._env.set_init_state(init_states)
+        # dummy warm-up steps (zero actions) for physics stabilization
+        # create zero action for each parallel env
+        dummy = np.zeros(self.action_space.shape, dtype=self.action_space.dtype)
+        for _ in range(5):
+            obs, _, _, _, info = self._env.step(dummy)
+        # process batched observations after warm-up
+        obs = self.process_obs(obs)
         return obs, info
     
     def step(self, *args, **kwargs):
@@ -139,8 +147,9 @@ class LiberoWrapper(gymnasium.Env):
         self.env.reset()
         if init_states is not None:
             raw_obs = self.env.set_init_state(init_states)
-        # dummy actions [ 7] all zeros for initial physics simulation (as in the original LIBERO code)
-        dummy = np.zeros((7,))
+        # dummy actions (7,) all zeros for initial physics simulation (as in the original LIBERO code)
+        # dummy = np.zeros((7,))
+        dummy = np.zeros(self.action_space.shape, dtype=self.action_space.dtype)
         for _ in range(5):
             raw_obs, _, _, _ = self.env.step(dummy)
         return self.make_obs(raw_obs), {}

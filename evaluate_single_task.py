@@ -174,7 +174,7 @@ def main():
                        help='Number of videos to save')
     parser.add_argument('--device', type=str, default='cuda:0',
                        help='Device to run on')
-    parser.add_argument('--seed', type=int, default=10000,
+    parser.add_argument('--seed', type=int, default=5000,
                        help='Random seed')
     parser.add_argument('--output_dir', type=str, default=None,
                        help='Output directory (default: auto-generated)')
