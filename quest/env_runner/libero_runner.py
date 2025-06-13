@@ -31,7 +31,7 @@ class LiberoRunner():
         self.rollouts_per_env = rollouts_per_env
         self.num_parallel_envs = num_parallel_envs
         self.frame_stack = frame_stack
-        if num_parallel_envs>1:
+        if num_parallel_envs > 1:
             if multiprocessing.get_start_method(allow_none=True) != "spawn":  
                 multiprocessing.set_start_method("spawn", force=True)
         self.max_episode_length = max_episode_length
@@ -59,6 +59,7 @@ class LiberoRunner():
                 env_succs.append(success)
                 env_rews.append(total_reward)
                 rewards.append(total_reward)
+
                 # save only the first n_video episodes
                 if i < n_video:
                     if save_video_fn is not None:
@@ -66,6 +67,7 @@ class LiberoRunner():
                         video_chw = video_hwc.transpose((0, 3, 1, 2))
                         save_video_fn(video_chw, env_name, i)
                     else:
+                        # if no save function provided, just store the video in a list
                         env_video.extend(episode['render'])
             # close rollout progress bar
             pb.close()
@@ -91,13 +93,8 @@ class LiberoRunner():
         if len(videos) > 0:
             output['rollout_videos'] = {}
         for env_name in videos:
-
             output['rollout_videos'][env_name] = videos[env_name]
         
-        # add individual rollout successes and rewards lists (cast to Python types for JSON)
-        output['rollout']['successes'] = [bool(s) for s in successes]
-        output['rollout']['rewards'] = [float(r) for r in rewards]
-
         return output
 
     def run_policy_in_env(self, env_name, policy, render=False):
@@ -170,6 +167,8 @@ class LiberoRunner():
         return success, total_reward, episode
     
 class LiberoSingleTaskRunner(LiberoRunner):
+    ##TODO: now this class is used for single task evaluation only
+    ## Consider making it abailable for single task training as well
     """
     Single task runner for cross-task evaluation.
     Allows evaluating on a specific task by task_id from a benchmark.
@@ -281,11 +280,9 @@ class LiberoSingleTaskRunner(LiberoRunner):
         
             for k in range(env_num):
                 success[k] = success[k] or terminated[k]
-            if steps == self.max_episode_length - 1:
+            if all(success):
                 break
             steps += 1
-        for key, value in episode.items():
-            episode[key] = np.array(value)
 
         episode = {key: np.array(value) for key, value in episode.items()}
         return success, total_reward, episode
