@@ -1,8 +1,8 @@
 # This script is used to train diffusion policy
 python train.py --config-name=train_prior.yaml \
-    task=libero_object \
+    task=libero_spatial \
     algo=diffusion_policy \
-    exp_name=final \
+    exp_name=debug \
     variant_name=block_32 \
     training.use_tqdm=true \
     training.save_all_checkpoints=true \

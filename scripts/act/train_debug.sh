@@ -1,6 +1,6 @@
 # This script is used to train the ACT model
 python train.py --config-name=train_prior.yaml \
-    task=libero_object \
+    task=libero_spatial \
     algo=act \
     exp_name=debug \
     variant_name=block_16 \

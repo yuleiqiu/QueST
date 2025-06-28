@@ -92,8 +92,8 @@ class LiberoRunner():
             output['rollout_success_rate'][env_name] = per_env_success_rates[env_name]
         if len(videos) > 0:
             output['rollout_videos'] = {}
-        for env_name in videos:
-            output['rollout_videos'][env_name] = videos[env_name]
+            for env_name in videos:
+                output['rollout_videos'][env_name] = videos[env_name]
         
         return output
 
@@ -145,7 +145,6 @@ class LiberoRunner():
         steps = 0
         while steps < self.max_episode_length:
             action = policy(obs, task_id, task_emb)
-            # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
             next_obs, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
