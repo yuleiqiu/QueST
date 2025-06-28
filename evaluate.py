@@ -3,6 +3,8 @@ import time
 import hydra
 import wandb
 from hydra.utils import instantiate
+from hydra.utils import get_original_cwd
+from hydra import compose
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -23,16 +25,29 @@ def main(cfg):
     torch.manual_seed(seed)
     train_cfg = cfg.training
     OmegaConf.resolve(cfg)
-    
-    # create model
+    # create evaluation output directory
     save_dir, _ = utils.get_experiment_dir(cfg, evaluate=True)
-    os.makedirs(save_dir)
+    os.makedirs(save_dir, exist_ok=True)
+    print('Saving to:', save_dir)
 
+    # determine checkpoint path (allow loading from a different task)
     if cfg.checkpoint_path is None:
-        # Basically if you don't provide a checkpoint path it will automatically find one corresponding
-        # to the experiment/variant name you provide
-        checkpoint_path, _ = utils.get_experiment_dir(cfg, evaluate=False, allow_overlap=True)
-        checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
+        if cfg.checkpoint_task:
+            # compose a config for checkpoint lookup with a different task
+            ckpt_cfg = compose(
+                config_name='evaluate',
+                overrides=[
+                    f"task={cfg.checkpoint_task}",
+                    f"algo={cfg.algo.name}",
+                    f"exp_name={cfg.exp_name}",
+                    f"variant_name={cfg.variant_name}",
+                    f"stage={cfg.stage}",
+                    f"seed={cfg.seed}"],
+            )
+            checkpoint_dir, _ = utils.get_experiment_dir(ckpt_cfg, evaluate=False, allow_overlap=True)
+        else:
+            checkpoint_dir, _ = utils.get_experiment_dir(cfg, evaluate=False, allow_overlap=True)
+        checkpoint_path = utils.get_latest_checkpoint(checkpoint_dir)
     else:
         checkpoint_path = utils.get_latest_checkpoint(cfg.checkpoint_path)
     state_dict = utils.load_state(checkpoint_path)
@@ -51,7 +66,6 @@ def main(cfg):
 
     env_runner = instantiate(cfg.task.env_runner)
     
-    print('Saving to:', save_dir)
     print('Running evaluation...')
 
     def save_video_fn(video_chw, env_name, idx):

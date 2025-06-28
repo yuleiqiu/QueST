@@ -166,8 +166,8 @@ class LiberoRunner():
         return success, total_reward, episode
     
 class LiberoSingleTaskRunner(LiberoRunner):
-    ##TODO: now this class is used for single task evaluation only
-    ## Consider making it abailable for single task training as well
+    #TODO: now this class is used for single task evaluation only
+    # Consider making it abailable for single task training as well
     """
     Single task runner for cross-task evaluation.
     Allows evaluating on a specific task by task_id from a benchmark.
