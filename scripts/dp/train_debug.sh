@@ -1,6 +1,6 @@
 # This script is used to train diffusion policy
 python train.py --config-name=train_prior.yaml \
-    task=libero_spatial \
+    task=libero_object \
     algo=diffusion_policy \
     exp_name=debug \
     variant_name=block_32 \
