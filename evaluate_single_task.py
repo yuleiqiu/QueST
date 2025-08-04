@@ -50,7 +50,7 @@ def create_config_for_single_task(benchmark_name, task_id, args):
             'task_id': task_id,
             'img_height': 128,
             'img_width': 128,
-            'horizon': 600,
+            'horizon': 500, # Some tasks may have different horizons
             'task_embedding_format': 'clip',
             'shape_meta': {
                 'action_dim': 7,
@@ -58,12 +58,12 @@ def create_config_for_single_task(benchmark_name, task_id, args):
                     'rgb': {
                         'agentview_rgb': [3, 128, 128],
                         'eye_in_hand_rgb': [3, 128, 128]
-                    },
+                        },
                     'lowdim': {
                         'joint_states': 7,
                         'ee_pos': 3,
                         'gripper_states': 2
-                    }
+                        }
                 },
                 'task': {
                     'type': 'vector',
@@ -81,7 +81,7 @@ def create_config_for_single_task(benchmark_name, task_id, args):
         'rollout': {
             'rollouts_per_env': args.rollouts_per_env,
             'num_parallel_envs': args.num_parallel_envs,
-            'max_episode_length': 600,
+            'max_episode_length': 500,
             'n_video': args.n_video
         }
     })
@@ -106,10 +106,7 @@ def load_model_from_checkpoint(checkpoint_path, config):
             shape_meta=config.task.shape_meta
         )
     else:
-        print('Warning: No saved config found in checkpoint. Using default QueST config.')
-        # Fallback to default QueST config if no saved config
-        from quest.algos.quest.quest import QueST
-        model = QueST(shape_meta=config.task.shape_meta)
+        raise ValueError("No saved config found in checkpoint. Cannot infer model architecture.")
     
     model.to(config.device)
     model.eval()
@@ -189,8 +186,15 @@ def main():
     
     # Create output directory
     if args.output_dir is None:
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}_task{args.task_id}_{timestamp}"
+        if args.checkpoint_path:
+            checkpoint_name = os.path.basename(args.checkpoint_path)
+            checkpoint_name_without_ext = os.path.splitext(checkpoint_name)[0]
+            parts = checkpoint_name_without_ext.split('_')
+            epoch_tag = '_'.join(parts[2:])
+            output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}_task{args.task_id}/{epoch_tag}"
+        else:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}_task{args.task_id}_{timestamp}"
     else:
         output_dir = args.output_dir
     

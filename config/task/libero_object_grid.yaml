@@ -1,0 +1,12 @@
+defaults:
+  - libero_base
+  - _self_
+
+benchmark_name: LIBERO_OBJECT_GRID
+mode: all
+n_tasks: 100
+demos_per_env: 1
+
+horizon: 500
+
+rollouts_per_env: 100

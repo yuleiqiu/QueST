@@ -1,0 +1,16 @@
+defaults:
+  - train_base
+  - _self_
+
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+
+logging_folder: prior
+
+training:
+  n_epochs: 100 # on libero: 20 for quest and 100 for other algos, 100 on metaworld for all algos
+
+rollout:
+  enabled: false
+
+logging:
+  project: libero_object_grid
