@@ -7,9 +7,10 @@ python train.py --config-name=train_grid.yaml \
     training.use_tqdm=true \
     training.save_all_checkpoints=true \
     training.use_amp=true \
+    training.n_epochs=100 \
     train_dataloader.persistent_workers=true \
     train_dataloader.num_workers=6 \
-    make_unique_experiment_dir=false \
+    make_unique_experiment_dir=true \
     algo.skill_block_size=16 \
     seed=5000
 

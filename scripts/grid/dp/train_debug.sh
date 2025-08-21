@@ -1,4 +1,4 @@
-# This script is used to train the ACT model
+# This script is used to train the Diffusion Policy model
 python train.py --config-name=train_grid.yaml \
     task=libero_object_grid \
     algo=diffusion_policy \
@@ -10,7 +10,7 @@ python train.py --config-name=train_grid.yaml \
     training.n_epochs=200 \
     train_dataloader.persistent_workers=true \
     train_dataloader.num_workers=6 \
-    make_unique_experiment_dir=false \
+    make_unique_experiment_dir=true \
     algo.skill_block_size=32 \
     seed=5000
 
