@@ -1,3 +1,4 @@
 [submodule "LIBERO"]
 	path = LIBERO
 	url = https://github.com/yuleiqiu/LIBERO.git
+	branch = one_obj_benchmark
