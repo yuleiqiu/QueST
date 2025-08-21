@@ -10,7 +10,9 @@ training:
   n_epochs: 100 # on libero: 20 for quest and 100 for other algos, 100 on metaworld for all algos
 
 rollout:
-  enabled: false
+  interval: 20 # rollout every ${rollout.interval} epochs
+  rollouts_per_env: 5
+  num_parallel_envs: 5 # 5 recommended for libero, 1 for metaworld
 
 logging:
   project: libero_object_grid

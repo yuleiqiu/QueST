@@ -2,7 +2,7 @@
 suite_name: libero
 benchmark_name: null
 mode: all
-n_tasks: 10
+n_tasks: 10 # only work when shape_meta.task.type is "onehot", can ignore here
 demos_per_env: 50
 
 task_embedding_format: clip

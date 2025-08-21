@@ -3,10 +3,7 @@ defaults:
   - _self_
 
 benchmark_name: LIBERO_OBJECT_GRID
-mode: all
-n_tasks: 100
-demos_per_env: 1
-
+mode: fewshot
+n_tasks: 100 # only work when shape_meta.task.type is "onehot", can ignore here
+demos_per_env: 20
 horizon: 500
-
-rollouts_per_env: 100
