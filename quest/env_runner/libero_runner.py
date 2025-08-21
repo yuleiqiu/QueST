@@ -203,7 +203,6 @@ class LiberoSingleTaskRunner(LiberoRunner):
         
         self.env_names = [all_task_names[task_id]]  # Only evaluate the target task
         
-        self.mode = 'single'
         self.rollouts_per_env = rollouts_per_env
         self.num_parallel_envs = num_parallel_envs
         self.frame_stack = frame_stack

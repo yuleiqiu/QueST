@@ -194,7 +194,7 @@ def build_dataset(data_prefix,
                   ):
     benchmark = get_benchmark(benchmark_name)()
     n_tasks = benchmark.n_tasks
-    few_shot_demos = np.linspace(0, 49, n_demos, dtype=int).tolist() if mode == 'fewshot' else None
+    few_shot_demos = np.linspace(0, n_demos-1, n_demos, dtype=int).tolist() if mode == 'fewshot' else None
     few_shot_demos_list = [f"demo_{i}" for i in few_shot_demos] if few_shot_demos is not None else None
     
     manip_datasets = []
@@ -235,9 +235,9 @@ def build_dataset(data_prefix,
     concat_dataset = ConcatDataset(datasets)
     print("\n===================  Benchmark Information  ===================")
     print(f" Name: {benchmark.name}")
-    print(f" # Tasks: {n_tasks}")
-    print(" # demonstrations: " + " ".join(f"({x})" for x in n_demos))
-    print(" # sequences: " + " ".join(f"({x})" for x in n_sequences))
+    print(f" Number of Tasks: {n_tasks}")
+    print(" Number of Demos (for each task): " + " ".join(f"({x})" for x in n_demos))
+    print(" Length of Demos (for each task): " + " ".join(f"({x})" for x in n_sequences))
     print("=======================================================================\n")
     return concat_dataset
 
