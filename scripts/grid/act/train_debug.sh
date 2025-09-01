@@ -12,6 +12,7 @@ python train.py --config-name=train_grid.yaml \
     train_dataloader.num_workers=6 \
     make_unique_experiment_dir=true \
     algo.skill_block_size=16 \
-    seed=5000
+    seed=5000 \
+    device=cuda:0
 
 # Note2: change rollout.num_parallel_envs to 1 if libero vectorized env is not working as expected.
