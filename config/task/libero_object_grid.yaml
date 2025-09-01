@@ -6,4 +6,4 @@ benchmark_name: LIBERO_OBJECT_GRID
 mode: fewshot
 n_tasks: 100 # only work when shape_meta.task.type is "onehot", can ignore here
 demos_per_env: 20
-horizon: 500
+horizon: 800 # during data collection it is 400, but we use 800 for rollout (some algos may execute longer)
