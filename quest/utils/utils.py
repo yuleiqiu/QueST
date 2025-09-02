@@ -58,7 +58,38 @@ def get_experiment_dir(cfg, evaluate=False, allow_overlap=False):
     experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
     return experiment_dir, experiment_name
 
+def get_checkpoint_with_selection(checkpoint_dir):
+    if os.path.isfile(checkpoint_dir):
+        return checkpoint_dir
+
+    onlyfiles = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
+    onlyfiles = natsorted(onlyfiles)
+    
+    if not onlyfiles:
+        raise ValueError(f"No checkpoint files found in {checkpoint_dir}")
+    
+    print(f"Available checkpoints in {checkpoint_dir}:")
+    for i, filename in enumerate(onlyfiles):
+        print(f"  {i + 1}: {filename}")
+    
+    while True:
+        try:
+            choice = input(f"Please select a checkpoint (1-{len(onlyfiles)}): ").strip()
+            choice_idx = int(choice) - 1
+            if 0 <= choice_idx < len(onlyfiles):
+                selected_file = onlyfiles[choice_idx]
+                print(f"Selected: {selected_file}")
+                return os.path.join(checkpoint_dir, selected_file)
+            else:
+                print(f"Invalid choice. Please enter a number between 1 and {len(onlyfiles)}")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nOperation cancelled.")
+            return None
+
 def get_latest_checkpoint(checkpoint_dir):
+    """Keep the original function for backward compatibility"""
     if os.path.isfile(checkpoint_dir):
         return checkpoint_dir
 

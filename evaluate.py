@@ -49,7 +49,8 @@ def main(cfg):
             checkpoint_dir, _ = utils.get_experiment_dir(cfg, evaluate=False, allow_overlap=True)
         checkpoint_path = utils.get_latest_checkpoint(checkpoint_dir)
     else:
-        checkpoint_path = utils.get_latest_checkpoint(cfg.checkpoint_path)
+        # checkpoint_path = utils.get_latest_checkpoint(cfg.checkpoint_path)
+        checkpoint_path = utils.get_checkpoint_with_selection(cfg.checkpoint_path)
     state_dict = utils.load_state(checkpoint_path)
     
     if 'config' in state_dict:
