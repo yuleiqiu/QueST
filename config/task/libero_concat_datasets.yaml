@@ -1,0 +1,79 @@
+defaults:
+  - libero_base
+  - _self_
+
+# 基础配置
+suite_name: libero
+mode: fewshot
+n_tasks: 10
+rollouts_per_env: 50
+
+# 第一个数据集配置
+dataset_1:
+  _target_: quest.utils.libero_utils.build_dataset
+  data_prefix: ${data_prefix}
+  suite_name: ${task.suite_name}
+  benchmark_name: libero_object
+  mode: ${task.mode}
+  seq_len: ${algo.dataset.seq_len}
+  frame_stack: ${algo.dataset.frame_stack}
+  obs_seq_len: ${algo.dataset.obs_seq_len}
+  shape_meta: ${task.shape_meta}
+  load_obs: ${training.load_obs}
+  task_embedding_format: ${task.task_embedding_format}
+  n_demos: 15
+  task_ids: null
+
+# 第二个数据集配置
+dataset_2:
+  _target_: quest.utils.libero_utils.build_dataset
+  data_prefix: ${data_prefix}
+  suite_name: ${task.suite_name}
+  benchmark_name: libero_spatial
+  mode: ${task.mode}
+  seq_len: ${algo.dataset.seq_len}
+  frame_stack: ${algo.dataset.frame_stack}
+  obs_seq_len: ${algo.dataset.obs_seq_len}
+  shape_meta: ${task.shape_meta}
+  load_obs: ${training.load_obs}
+  task_embedding_format: ${task.task_embedding_format}
+  n_demos: 5
+  task_ids: [0]
+
+# 保持原有的dataset配置用于兼容性（使用第一个数据集的配置）
+dataset:
+  _target_: quest.utils.libero_utils.build_dataset
+  data_prefix: ${data_prefix}
+  suite_name: ${task.suite_name}
+  benchmark_name: libero_object
+  mode: ${task.mode}
+  seq_len: ${algo.dataset.seq_len}
+  frame_stack: ${algo.dataset.frame_stack}
+  obs_seq_len: ${algo.dataset.obs_seq_len}
+  shape_meta: ${task.shape_meta}
+  load_obs: ${training.load_obs}
+  task_embedding_format: ${task.task_embedding_format}
+  n_demos: 10
+
+# 环境相关配置（使用第一个数据集的benchmark）
+env_factory:
+  _target_: quest.utils.libero_utils.LiberoWrapper
+  _partial_: true 
+  shape_meta: ${task.shape_meta}
+  obs_key_mapping: ${task.obs_key_mapping}
+  img_height: ${task.img_height}
+  img_width: ${task.img_width}
+  device: ${device}
+
+env_runner:
+  _target_: quest.env_runner.libero_runner.LiberoRunner
+  env_factory: ${task.env_factory}
+  frame_stack: ${algo.frame_stack}
+  benchmark_name: libero_object  # 使用第一个数据集的benchmark进行评估
+  mode: ${task.mode}
+  rollouts_per_env: ${rollout.rollouts_per_env}
+  num_parallel_envs: ${rollout.num_parallel_envs}
+  max_episode_length: ${rollout.max_episode_length}
+  fps: 24
+  debug: false
+  task_embedding_format: ${task.task_embedding_format}

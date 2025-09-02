@@ -55,5 +55,5 @@ logging:
   group: null
   mode: online # set logging.mode=disabled to disable wandb
   project: quest # TODO: change this to your wandb project name
-  resume: true
+  resume: auto
   save_code: true

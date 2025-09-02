@@ -1,5 +1,5 @@
 import copy
-
+from typing import Any, Dict, List, Optional, Tuple, Union
 # import gym.spaces
 # import gym.wrappers
 import gymnasium
@@ -179,21 +179,41 @@ class LiberoWrapper(gymnasium.Env):
     def render(self, *args, **kwargs):
         return self.render_out
 
-def build_dataset(data_prefix,
-                  suite_name,
-                  benchmark_name, 
-                  mode, 
-                  seq_len, 
-                  frame_stack,
-                  shape_meta,
-                  n_demos,
-                  extra_obs_modality=None,
-                  obs_seq_len=1, 
-                  load_obs=True,
-                  task_embedding_format="clip",
+def build_dataset(data_prefix: str,
+                  suite_name: str,
+                  benchmark_name: str,
+                  mode: str,
+                  seq_len: int,
+                  frame_stack: int,
+                  shape_meta: Dict[str, Any],
+                  n_demos: int,
+                  task_ids: List[int] = None,
+                  extra_obs_modality: Optional[dict] = None,
+                  obs_seq_len: int = 1,
+                  load_obs: bool = True,
+                  task_embedding_format: str = "clip",
                   ):
+    """
+    Build a dataset of a benchmark. If not specified, use all tasks in this benchmark.
+
+    Args:
+        data_prefix (str): The prefix path to the dataset.
+        suite_name (str): The name of the suite.
+        benchmark_name (str): The name of the benchmark.
+        mode (str): The mode of the dataset (e.g., "train", "val", "test").
+        seq_len (int): The length of the sequences.
+        frame_stack (int): The number of frames to stack.
+        shape_meta (dict): Metadata about the shapes of the observations.
+        n_demos (int): The number of demonstrations of each task. You can select only a subset of demos.
+        task_ids (List[int]): Task IDs to include in the dataset. You can select only a subset of tasks.
+        extra_obs_modality (Optional[dict]): Additional observation modalities to include.
+        obs_seq_len (int): The length of the observation sequences.
+        load_obs (bool): Whether to load the observations.
+        task_embedding_format (str): The format of the task embeddings.
+    """
     benchmark = get_benchmark(benchmark_name)()
     n_tasks = benchmark.n_tasks
+    task_list = task_ids if task_ids is not None else list(range(n_tasks))
     few_shot_demos = np.linspace(0, n_demos-1, n_demos, dtype=int).tolist() if mode == 'fewshot' else None
     few_shot_demos_list = [f"demo_{i}" for i in few_shot_demos] if few_shot_demos is not None else None
     
@@ -209,20 +229,21 @@ def build_dataset(data_prefix,
             obs_modality[key] = obs_modality[key] + extra_obs_modality[key]
     # breakpoint()
     ObsUtils.initialize_obs_utils_with_obs_specs({"obs": obs_modality})
-    for i in trange(n_tasks):
+    for i in trange(len(task_list), desc="Retrieving selected tasks to build the dataset"):
         task_i_dataset = get_dataset(
             dataset_path=os.path.join(
-                data_prefix, suite_name, benchmark.get_task_demonstration(i)
+                data_prefix, suite_name, benchmark.get_task_demonstration(task_list[i])
             ),
             obs_modality=obs_modality,
             seq_len=seq_len,
             obs_seq_len=obs_seq_len,
             frame_stack=frame_stack,
             load_obs=load_obs,
-            few_demos = few_shot_demos_list,
+            few_demos=few_shot_demos_list,
             n_demos=n_demos,
         )
-        task_description = benchmark.get_task(i).language
+        task_description = benchmark.get_task(task_list[i]).language
+        # print(f"Task {task_list[i]} description: {task_description}")
         descriptions.append(task_description)
         manip_datasets.append(task_i_dataset)
     task_embs = get_task_embs(task_embedding_format, descriptions)
@@ -235,7 +256,8 @@ def build_dataset(data_prefix,
     concat_dataset = ConcatDataset(datasets)
     print("\n===================  Benchmark Information  ===================")
     print(f" Name: {benchmark.name}")
-    print(f" Number of Tasks: {n_tasks}")
+    print(f" Number of Tasks in the Benchmark: {n_tasks}")
+    print(f" Selected Task IDs : {task_list}")
     print(" Number of Demos (for each task): " + " ".join(f"({x})" for x in n_demos))
     print(" Length of Demos (for each task): " + " ".join(f"({x})" for x in n_sequences))
     print("=======================================================================\n")
@@ -253,6 +275,7 @@ def get_dataset(
     few_demos=None,
     n_demos=None,
     ):
+    # print(dataset_path)
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():
         all_obs_keys += modality_list
