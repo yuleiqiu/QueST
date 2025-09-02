@@ -36,6 +36,25 @@ np.set_printoptions(suppress=True)
 
 
 class LiberoVectorWrapper(gymnasium.Env):
+    """
+    Wrapper for vectorized environments in LIBERO.
+
+    Note for seed:
+    
+    DummyVectorEnv (Single Environment):
+
+    - The random seed is determined by the NumPy global random state of the main process.
+    - If no seed is set after the program starts, the system default seed (usually based on system time) is used.
+    - Each program run will exhibit different random behavior unless the seed is manually set.
+
+    SubprocVectorEnv (Multiple Environments):
+
+    - Each subprocess has an independent random state, initialized based on the system state at the time of process creation.
+    - Random seeds for different subprocesses are typically distinct since they are created at different times.
+    - Each program run will result in new, independent random seeds for all subprocesses.
+
+    Important Note: As warned in the code comments, to ensure reproducibility, explicitly call the `env.seed()` method to set the seed. Otherwise, different environment instances may produce identical or unpredictable random behavior.
+    """
     def __init__(self,
                  env_factory,
                  env_num):
@@ -88,6 +107,9 @@ class LiberoVectorWrapper(gymnasium.Env):
         for key in obs_out:
             obs_out[key] = np.array(obs_out[key])
         return obs_out
+    
+    def close(self):
+        self._env.close()
 
 
 class LiberoFrameStack(FrameStackObservationFixed):
@@ -178,6 +200,9 @@ class LiberoWrapper(gymnasium.Env):
     
     def render(self, *args, **kwargs):
         return self.render_out
+    
+    def close(self):
+        self.env.env.close()
 
 def build_dataset(data_prefix: str,
                   suite_name: str,
