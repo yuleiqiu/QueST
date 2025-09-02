@@ -85,41 +85,49 @@ import quest.utils.libero_utils as lu
 from quest.env_runner.libero_runner import LiberoSingleTaskRunner
 
 
-def load_model_from_checkpoint(checkpoint_path, config):
-    """Load model from checkpoint"""
-    print(f"Loading checkpoint from: {checkpoint_path}")
-    
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-    
+def load_model_from_checkpoint(checkpoint_dir, config):
+    """
+    Load model from checkpoint
+
+    Args:
+        checkpoint_dir: Directory containing (multiple) model checkpoint files.
+        config: Hydra configuration object.
+    """
+    print(f"Loading checkpoint from: {checkpoint_dir}")
+    checkpoint_path = utils.get_checkpoint_with_selection(checkpoint_dir)
+
+    # Load model state
     state_dict = utils.load_state(checkpoint_path)
     
     # Create model based on saved config or provided config
     if 'config' in state_dict:
         print('Auto-loading model based on saved parameters')
-        model_config = state_dict['config']['algo']['policy']
-        # Override with any potential changes from the current config
-        OmegaConf.set_struct(model_config, False)
-        model_config = OmegaConf.merge(model_config, config.get('policy', {}))
-        OmegaConf.set_struct(model_config, True)
-        
+        policy_config_from_model = state_dict['config']['algo']['policy']        
         model = hydra.utils.instantiate(
-            model_config, 
+            policy_config_from_model, 
             shape_meta=config.task.shape_meta
         )
     else:
-        raise ValueError("No saved config found in checkpoint. Cannot infer model architecture.")
-    
+        print("No saved config found in checkpoint. Cannot infer model architecture.")
+        print("Using a default policy configuration.")
+        model = hydra.utils.instantiate(
+            config.algo.policy,
+            shape_meta=config.task.shape_meta
+        )
+
     model.to(config.device)
     model.eval()
     model.load_state_dict(state_dict['model'])
     print(f"Model loaded successfully on {config.device}")
     
+
     return model
 
 
 def create_env_runner(config):
-    """Create LiberoSingleTaskRunner"""
+    """
+    Create LiberoSingleTaskRunner
+    """
     env_factory = functools.partial(
         lu.LiberoWrapper,
         shape_meta=config.task.shape_meta,
@@ -165,6 +173,7 @@ def main(config: DictConfig):
     
     # Load model
     model = load_model_from_checkpoint(config.checkpoint_path, config)
+    exit(0)  # Temporary exit to avoid running evaluation during testing
     
     # Create environment runner
     env_runner = create_env_runner(config)
