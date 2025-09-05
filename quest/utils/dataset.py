@@ -448,12 +448,6 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.goal_mode == "last":
             goal_index = end_index_in_demo - 1
 
-
-        # print(high_dim_keys)
-        # print(low_dim_keys)
-
-        # self.get_obs_sequence_from_demo(demo_id, index_in_demo=index_in_demo, keys=self.obs_keys, num_frames_to_stack=self.n_frame_stack - 1, seq_length=self.obs_seq_length, prefix="obs")
-
         if self.lowdim_obs_seq_length is None:
             meta["obs"] = self.get_obs_sequence_from_demo(
                 demo_id,

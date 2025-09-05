@@ -77,7 +77,7 @@ class DETRVAE(nn.Module):
             proprio_dim: dimensionality of proprioceptive observations (joint positions, etc.)
             num_queries: number of action queries (maximum sequence length for action prediction)
             shape_meta: metadata containing observation space information (lowdim, rgb, etc.)
-            encoder_input: tuple specifying which observation types to use in encoder ('lowdim', 'perception')
+            encoder_input: tuple specifying which observation types to use in encoder. Default: ('lowdim',)
         """
         super().__init__()
         self.num_queries = num_queries
@@ -93,7 +93,7 @@ class DETRVAE(nn.Module):
         self.latent_dim = 32 # dimension of latent variable z
         self.cls_embed = nn.Embedding(1, hidden_dim) # CLS token embedding for encoder
         self.encoder_action_proj = nn.Linear(state_dim, hidden_dim) # project actions to hidden dimension
-        self.encoder_joint_proj = nn.Linear(proprio_dim, hidden_dim)  # project proprioception to hidden dimension  
+        self.encoder_joint_proj = nn.Linear(proprio_dim, hidden_dim)  # project proprioception to hidden dimension, not used
         self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project encoder output to latent mean and logvar
         
         # Count encoder input modalities

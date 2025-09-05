@@ -28,7 +28,7 @@ shape_meta:
       gripper_states: 2
   task:
     type: vector
-    dim: 512
+    dim: 512 # dim of the text feature vector from openai/clip-vit-base-patch32
 
 dataset:
   _target_: quest.utils.libero_utils.build_dataset
