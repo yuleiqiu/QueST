@@ -2,6 +2,9 @@
 This file contains all neural modules related to encoding the spatial
 information of obs_t, i.e., the abstracted knowledge of the current visual
 input conditioned on the language.
+Note:
+    Used in QueST: ResnetEncoder
+    Not Used in QueST: FrozenBatchNorm2d, PatchEncoder, SpatialSoftmax, SpatialProjection, DINOEncoder
 """
 import torch
 import torch.nn as nn

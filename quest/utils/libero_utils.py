@@ -244,7 +244,8 @@ def build_dataset(data_prefix: str,
     
     manip_datasets = []
     descriptions = []
-    # for key, value in shape_meta
+
+    # determine observation modalities
     obs_modality = {
         'rgb': list(shape_meta['observation']['rgb'].keys()),
         'low_dim': list(shape_meta['observation']['lowdim'].keys()),
@@ -252,8 +253,9 @@ def build_dataset(data_prefix: str,
     if extra_obs_modality is not None:
         for key in extra_obs_modality:
             obs_modality[key] = obs_modality[key] + extra_obs_modality[key]
-    # breakpoint()
     ObsUtils.initialize_obs_utils_with_obs_specs({"obs": obs_modality})
+
+    # retrieve datasets for each task
     for i in trange(len(task_list), desc="Retrieving selected tasks to build the dataset"):
         task_i_dataset = get_dataset(
             dataset_path=os.path.join(
@@ -300,7 +302,9 @@ def get_dataset(
     few_demos=None,
     n_demos=None,
     ):
-    # print(dataset_path)
+    """
+    Retrieve a SequenceDataset for a specific task.
+    """
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():
         all_obs_keys += modality_list
@@ -323,7 +327,7 @@ def get_dataset(
         obs_seq_length=obs_seq_len,
         pad_frame_stack=True,
         pad_seq_length=True,  # pad last obs per trajectory to ensure all sequences are sampled
-        get_pad_mask=False,
+        get_pad_mask=False, # if True, the dataset will return a boolean mask indicating the padded elements
         goal_mode=None,
         hdf5_cache_mode=hdf5_cache_mode,  # cache dataset in memory to avoid repeated file i/o
         hdf5_use_swmr=False,
@@ -368,11 +372,12 @@ def get_task_embs(task_embedding_format, descriptions):
             return_attention_mask=True,  # Generate the attention mask
             return_tensors="pt",  # ask the function to return PyTorch tensors
         )
-        masks = tokens["attention_mask"]
-        input_ids = tokens["input_ids"]
-        task_embs = model(tokens["input_ids"], tokens["attention_mask"])[
-            "pooler_output"
-        ].detach()
+        # masks = tokens["attention_mask"]
+        # input_ids = tokens["input_ids"]
+        task_embs = model(
+            tokens["input_ids"],
+            tokens["attention_mask"]
+        )["pooler_output"].detach()
     elif task_embedding_format == "gpt2":
         tz = AutoTokenizer.from_pretrained("gpt2")
         tz.pad_token = tz.eos_token
@@ -411,5 +416,7 @@ def get_task_embs(task_embedding_format, descriptions):
             return_tensors="pt",  # ask the function to return PyTorch tensors
         )
         task_embs = model(**tokens)["pooler_output"].detach()
-    return task_embs
+    else:
+        raise NotImplementedError(f"Unknown task embedding format: {task_embedding_format}")
 
+    return task_embs
