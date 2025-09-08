@@ -175,7 +175,11 @@ def main(config: DictConfig):
 
     # Set random seed
     torch.manual_seed(seed)
+
+    # Resolve config to avoid interpolation issues
     OmegaConf.resolve(config)
+
+    # Create save directory
     save_dir, _ = utils.get_experiment_dir(config, evaluate=True)
     os.makedirs(save_dir, exist_ok=True)
     print('Saving to:', save_dir)
@@ -205,8 +209,8 @@ def main(config: DictConfig):
     print(f"Device: {config.device}")
     print("=" * 40)
     
-    # Define video save function
-    def video_save_fn(video_chw, env_name, idx):
+    # Define video save callback function
+    def save_video_callback_fn(video_chw, env_name, idx):
         save_video_fn(video_chw, env_name, idx, save_dir, config.rollout.fps)
     
     # Run evaluation
@@ -217,7 +221,7 @@ def main(config: DictConfig):
         model, 
         n_video=config.rollout.n_video,
         do_tqdm=True,
-        save_video_fn=video_save_fn if config.rollout.n_video > 0 else None
+        save_video_fn=save_video_callback_fn if config.rollout.n_video > 0 else None
     )
     
     end_time = time.time()
