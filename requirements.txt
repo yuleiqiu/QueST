@@ -24,5 +24,6 @@ bddl==1.0.1
 future==0.18.2
 gym==0.25.2
 cloudpickle==2.1.0
-robosuite
+robosuite==1.4.1
 transformers
+huggingface-hub==0.25.2
