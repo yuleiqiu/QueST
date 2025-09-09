@@ -103,7 +103,7 @@ def main(cfg):
 
 
     OmegaConf.set_struct(cfg, False)
-    # --- 数据集1的参数 ---
+    # --- Dataset 1 parameters ---
     params_1 = {
         "data_prefix": "./data",
         "suite_name": "libero",
@@ -163,7 +163,7 @@ def main(cfg):
                 }
             }
         },
-        "n_demos": 5,
+        "n_demos": 500,
         "task_ids": [0],
         "obs_seq_len": 1,
         "load_obs": True,
@@ -184,39 +184,39 @@ def main(cfg):
     # dataset_2 = instantiate(dataset_2_cfg)
     # print(f"Dataset 2 built successfully! Length: {len(dataset_2)}")
 
-    print("开始构建数据集1...")
+    print("\nBuilding dataset 1...")
     try:
         dataset_1 = build_dataset(**params_1)
-        print("\n数据集1构建成功!")
-        print(f"数据集1类型: {type(dataset_1)}")
-        print(f"数据集1长度: {len(dataset_1)}")
+        print("\nDataset 1 built successfully!")
+        print(f"Dataset 1 type: {type(dataset_1)}")
+        print(f"Dataset 1 length: {len(dataset_1)}")
 
     except Exception as e:
-        print(f"\n构建数据集1时发生错误: {e}")
+        print(f"\nError occurred while building Dataset 1: {e}")
         import traceback
         traceback.print_exc()
 
     print("\n" + "="*50 + "\n")
 
-    print("开始构建数据集2...")
+    print("Building dataset 2...")
     try:
         dataset_2 = build_dataset(**params_2)
-        print("\n数据集2构建成功!")
-        print(f"数据集2类型: {type(dataset_2)}")
-        print(f"数据集2长度: {len(dataset_2)}")
+        print("\nDataset 2 built successfully!")
+        print(f"Dataset 2 type: {type(dataset_2)}")
+        print(f"Dataset 2 length: {len(dataset_2)}")
 
     except Exception as e:
-        print(f"\n构建数据集2时发生错误: {e}")
+        print(f"\nError occurred while building Dataset 2: {e}")
         import traceback
         traceback.print_exc()
 
     # 拼接数据集
     dataset = ConcatDataset([dataset_1, dataset_2])
-    print(f"拼接后的数据集总长度: {len(dataset)}")
-    
+    print(f"Concat dataset length: {len(dataset)}")
+
     # 验证拼接是否成功
-    assert len(dataset) == len(dataset_1) + len(dataset_2), "数据集拼接长度不正确"
-    print("数据集拼接验证成功!")
+    assert len(dataset) == len(dataset_1) + len(dataset_2), "Concat dataset length is incorrect"
+    print("Concat dataset validation successful!\n")
 
     model.preprocess_dataset(dataset, use_tqdm=train_cfg.use_tqdm)
     train_dataloader = instantiate(
@@ -260,7 +260,9 @@ def main(cfg):
 
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
-        # rollout_results = env_runner.run(model, n_video=cfg.rollout.n_video, do_tqdm=train_cfg.use_tqdm) # for debugging env runner before starting training
+        rollout_results = env_runner.run(model, n_video=0, do_tqdm=train_cfg.use_tqdm) # for debugging env runner before starting training
+        print(rollout_results)
+        breakpoint()
     
     # print('Saving to:', experiment_dir)
     # print('Experiment name:', experiment_name)

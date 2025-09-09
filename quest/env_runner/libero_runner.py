@@ -28,7 +28,7 @@ class LiberoRunner():
         self.benchmark.set_task_embs(task_embs)
         self.env_names = self.benchmark.get_task_names()
 
-        self.mode = mode
+        self.mode = mode # not used
         self.rollouts_per_env = rollouts_per_env
         self.num_parallel_envs = num_parallel_envs
         self.frame_stack = frame_stack
