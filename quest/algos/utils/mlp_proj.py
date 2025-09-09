@@ -1,6 +1,5 @@
 import torch.nn as nn
 
-
 class MLPProj(nn.Module):
     """
     Encode any embedding
@@ -30,3 +29,7 @@ class MLPProj(nn.Module):
         """
         h = self.projection(data)  # (B, H)
         return h
+
+if __name__ == "__main__":
+    model = MLPProj(input_size=7, output_size=256)
+    print(model)

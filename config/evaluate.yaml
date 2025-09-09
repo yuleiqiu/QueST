@@ -26,7 +26,7 @@ device: cuda:0
 stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 output_prefix: ./experiments
 data_prefix: ./data
-make_unique_experiment_dir: false
+make_unique_experiment_dir: true
 
 checkpoint_path: null  # override path or lookup default if null
 checkpoint_task: null  # optional: task name to load checkpoint from a different environment

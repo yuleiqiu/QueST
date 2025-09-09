@@ -71,55 +71,67 @@ Then, you can run the evaluation with:
 
 """
 
-import os
-import time
-import json
-import hydra
-from omegaconf import DictConfig, OmegaConf
-from moviepy.editor import ImageSequenceClip
-import torch
 import functools
+import json
+import os
+import pdb
+import time
+import types
+from pprint import pprint
 
-import quest.utils.utils as utils
+import hydra
+import torch
+from moviepy.editor import ImageSequenceClip
+from omegaconf import DictConfig, OmegaConf
+
 import quest.utils.libero_utils as lu
+import quest.utils.utils as utils
 from quest.env_runner.libero_runner import LiberoSingleTaskRunner
 
 
-def load_model_from_checkpoint(checkpoint_path, config):
-    """Load model from checkpoint"""
-    print(f"Loading checkpoint from: {checkpoint_path}")
-    
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-    
+def load_model_from_checkpoint(config: DictConfig):
+    """
+    Load model from checkpoint
+
+    Args:
+        config (DictConfig): Hydra configuration object.
+    """
+    print(f"Loading checkpoint from: {config.checkpoint_dir}")
+    checkpoint_path = utils.get_checkpoint_with_selection(config.checkpoint_dir)
+
+    # Load model state
     state_dict = utils.load_state(checkpoint_path)
     
     # Create model based on saved config or provided config
     if 'config' in state_dict:
         print('Auto-loading model based on saved parameters')
-        model_config = state_dict['config']['algo']['policy']
-        # Override with any potential changes from the current config
-        OmegaConf.set_struct(model_config, False)
-        model_config = OmegaConf.merge(model_config, config.get('policy', {}))
-        OmegaConf.set_struct(model_config, True)
-        
+        policy_config_from_model = state_dict['config']['algo']['policy']
+        # pprint(policy_config_from_model)
+        # pdb.set_trace()
         model = hydra.utils.instantiate(
-            model_config, 
+            policy_config_from_model, 
             shape_meta=config.task.shape_meta
         )
     else:
-        raise ValueError("No saved config found in checkpoint. Cannot infer model architecture.")
-    
+        print("No saved config found in checkpoint. Cannot infer model architecture.")
+        print("Using a default policy configuration.")
+        model = hydra.utils.instantiate(
+            config.algo.policy,
+            shape_meta=config.task.shape_meta
+        )
+
     model.to(config.device)
     model.eval()
     model.load_state_dict(state_dict['model'])
     print(f"Model loaded successfully on {config.device}")
-    
+
     return model
 
 
 def create_env_runner(config):
-    """Create LiberoSingleTaskRunner"""
+    """
+    Create LiberoSingleTaskRunner
+    """
     env_factory = functools.partial(
         lu.LiberoWrapper,
         shape_meta=config.task.shape_meta,
@@ -155,17 +167,32 @@ def save_video_fn(video_chw, env_name, idx, save_dir, fps):
     print(f"Video saved: {save_path}")
 
 
+OmegaConf.register_new_resolver("eval", eval, replace=True)
 @hydra.main(config_path="config", config_name="evaluate_single_task", version_base=None)
 def main(config: DictConfig):
+    device = config.device
+    seed = config.seed
+
     # Set random seed
-    torch.manual_seed(config.seed)
-    
-    output_dir = os.getcwd() # hydra automatically changes the working directory
-    print(f"Output directory: {output_dir}")
-    
+    torch.manual_seed(seed)
+
+    # Resolve config to avoid interpolation issues
+    OmegaConf.resolve(config)
+
+    # Create save directory
+    save_dir, _ = utils.get_experiment_dir(config, evaluate=True)
+    os.makedirs(save_dir, exist_ok=True)
+    print('Saving to:', save_dir)
+
+    # # Have a look at config
+    # print("The config loaded from yaml is:")
+    # print(OmegaConf.to_yaml(config))
+    # pdb.set_trace()
+
     # Load model
-    model = load_model_from_checkpoint(config.checkpoint_path, config)
-    
+    model = load_model_from_checkpoint(config)
+    # pdb.set_trace()
+
     # Create environment runner
     env_runner = create_env_runner(config)
     
@@ -182,9 +209,9 @@ def main(config: DictConfig):
     print(f"Device: {config.device}")
     print("=" * 40)
     
-    # Define video save function
-    def video_save_fn(video_chw, env_name, idx):
-        save_video_fn(video_chw, env_name, idx, output_dir, config.rollout.fps)
+    # Define video save callback function
+    def save_video_callback_fn(video_chw, env_name, idx):
+        save_video_fn(video_chw, env_name, idx, save_dir, config.rollout.fps)
     
     # Run evaluation
     print("Running evaluation...")
@@ -194,7 +221,7 @@ def main(config: DictConfig):
         model, 
         n_video=config.rollout.n_video,
         do_tqdm=True,
-        save_video_fn=video_save_fn if config.rollout.n_video > 0 else None
+        save_video_fn=save_video_callback_fn if config.rollout.n_video > 0 else None
     )
     
     end_time = time.time()
@@ -217,14 +244,14 @@ def main(config: DictConfig):
         'task_name': task_name
     }
     
-    results_file = os.path.join(output_dir, 'results.json')
+    results_file = os.path.join(save_dir, 'results.json')
     with open(results_file, 'w') as f:
         json.dump(results_data, f, indent=2)
     
     print(f"Results saved to: {results_file}")
     
     if config.rollout.n_video > 0:
-        print(f"Videos saved to: {os.path.join(output_dir, 'videos')}")
+        print(f"Videos saved to: {os.path.join(save_dir, 'videos')}")
 
 
 if __name__ == "__main__":

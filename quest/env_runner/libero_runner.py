@@ -5,6 +5,7 @@ import quest.utils.obs_utils as ObsUtils
 import wandb
 from tqdm import tqdm
 import multiprocessing
+import pdb
 
 class LiberoRunner():
     def __init__(self,
@@ -27,7 +28,7 @@ class LiberoRunner():
         self.benchmark.set_task_embs(task_embs)
         self.env_names = self.benchmark.get_task_names()
 
-        self.mode = mode
+        self.mode = mode # not used
         self.rollouts_per_env = rollouts_per_env
         self.num_parallel_envs = num_parallel_envs
         self.frame_stack = frame_stack
@@ -146,6 +147,13 @@ class LiberoRunner():
         while steps < self.max_episode_length:
             action = policy(obs, task_id, task_emb)
             action = np.clip(action, env.action_space.low, env.action_space.high)
+            """
+            Note on "executing action in terminated episode" error:
+            This error can occur because `robosuite`'s `MujocoEnv` has an internal `horizon` (default 1000) that acts as a step counter.
+            This counter can get out of sync with our external loop counter, causing the environment to terminate prematurely without the wrapper environment being aware.
+            Specifically, the internal `done` signal is overridden (see BDDLBaseDomain.step). To prevent this, `task.horizon` should be less than the environment's internal horizon.
+            We have modified the `horizon` in `env_wrapper.ControlEnv` to 2000, because our `max_episode_length` is intended to be twice the `task.horizon` of 500.
+            """
             next_obs, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
             obs = next_obs
@@ -169,7 +177,6 @@ class LiberoSingleTaskRunner(LiberoRunner):
     #TODO: now this class is used for single task evaluation only
     # Consider making it abailable for single task training as well
     """
-    Single task runner for cross-task evaluation.
     Allows evaluating on a specific task by task_id from a benchmark.
     """
     def __init__(self,
@@ -241,6 +248,7 @@ class LiberoSingleTaskRunner(LiberoRunner):
                 episode_k = {key: value[:,k] for key, value in episode.items()}
                 yield success[k], total_reward[k], episode_k
         env._env.close()
+        # env.close()
         gc.collect()
         del env
 
@@ -265,9 +273,25 @@ class LiberoSingleTaskRunner(LiberoRunner):
         task_emb = self.benchmark.get_task_emb(task_id).repeat(env_num, 1)
         steps = 0
         while steps < self.max_episode_length:
+
+            # Check if all environments are already terminated to avoid action execution
+            if all(success):
+                break
+
             action = policy(obs, task_id, task_emb)
             action = np.clip(action, env.action_space.low, env.action_space.high)
+            """
+            Note on "executing action in terminated episode" error:
+            This error can occur because `robosuite`'s `MujocoEnv` has an internal `horizon` (default 1000) that acts as a step counter.
+            This counter can get out of sync with our external loop counter, causing the environment to terminate prematurely without the wrapper environment being aware.
+            Specifically, the internal `done` signal is overridden (see BDDLBaseDomain.step). To prevent this, `task.horizon` should be less than the environment's internal horizon.
+            We have modified the `horizon` in `env_wrapper.ControlEnv` to 2000, because our `max_episode_length` is intended to be twice the `task.horizon` of 500.
+            """
+            # TODO: fix the action execution in terminated episode
+            # LiberoWrapper -> OffScreenRenderEnv -> ControlEnv -> BDDLBaseDomain -> SingleArmEnv -> MujocoEnv
+            # Find BDDLBaseDomain and change its step function
             next_obs, reward, terminated, truncated, info = env.step(action)
+
             total_reward += reward
             obs = next_obs
             for key, value in obs.items():
@@ -278,8 +302,7 @@ class LiberoSingleTaskRunner(LiberoRunner):
         
             for k in range(env_num):
                 success[k] = success[k] or terminated[k]
-            if all(success):
-                break
+            
             steps += 1
 
         episode = {key: np.array(value) for key, value in episode.items()}

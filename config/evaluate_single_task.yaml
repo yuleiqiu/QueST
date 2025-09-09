@@ -1,53 +1,42 @@
 defaults:
   - _self_
-  - override hydra/launcher: basic
+  - task: libero_object_random
+  - algo: quest
+  # - override hydra/launcher: basic
 
-hydra:
-  run:
-    dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}/${now:%Y.%m.%d}/${now:%H.%M.%S}
-  sweep:
-    dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}
-    subdir: ${hydra.job.num}
+# hydra:
+#   run:
+#     dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}/${now:%Y.%m.%d}/${now:%H.%M.%S}
+#   sweep:
+#     dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}
+#     subdir: ${hydra.job.num}
 
-# General settings
-device: cuda:0
-seed: 5000
-checkpoint_path: /path/to/your/checkpoint.pth # IMPORTANT: Change this path
-
-# Task specific configuration
-task:
-  suite_name: libero
-  benchmark_name: LIBERO_OBJECT_RANDOM # e.g., LIBERO_10, LIBERO_OBJECT
-  task_id: 0 # The ID of the task you want to evaluate
-  img_height: 128
-  img_width: 128
-  horizon: 500
-  task_embedding_format: clip
-  shape_meta:
-    action_dim: 7
-    observation:
-      rgb:
-        agentview_rgb: [3, 128, 128]
-        eye_in_hand_rgb: [3, 128, 128]
-      lowdim:
-        joint_states: 7
-        ee_pos: 3
-        gripper_states: 2
-    task:
-      type: vector
-      dim: 512
-  obs_key_mapping:
-    agentview_rgb: 'agentview_image'
-    eye_in_hand_rgb: 'robot0_eye_in_hand_image'
-    gripper_states: 'robot0_gripper_qpos'
-    joint_states: 'robot0_joint_pos'
-    ee_pos: 'robot0_eef_pos'
+training:
+  use_tqdm: true
+  n_epochs: 0
+  do_profile: false
+  resume: false
+  load_obs: false
 
 # Rollout settings
 rollout:
-  rollouts_per_env: 20
+  enabled: true
+  rollouts_per_env: 5
   num_parallel_envs: 5
-  max_episode_length: 1000
-  n_video: 3
+  max_episode_length: ${eval:'${task.horizon} * 2'}
+  n_video: 0
   fps: 24
   debug: false
+
+# General settings
+exp_name: debug
+variant_name: null
+seed: 6000
+device: cuda:0
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+output_prefix: ./experiments
+data_prefix: ./data
+make_unique_experiment_dir: true
+
+# IMPORTANT: Change this to the directory where your checkpoints are stored
+checkpoint_dir: /path/to/your/checkpoint/

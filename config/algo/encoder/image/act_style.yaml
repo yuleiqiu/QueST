@@ -6,3 +6,5 @@ backbone_name: resnet18
 # train_backbone: true
 return_interm_layers: false
 dilation: false
+
+# This is not used.

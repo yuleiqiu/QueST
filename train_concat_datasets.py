@@ -11,6 +11,7 @@ import warnings
 import torch
 import torch.nn as nn
 import quest.utils.utils as utils
+from quest.utils.libero_utils import build_dataset
 from pyinstrument import Profiler
 from quest.utils.logger import Logger
 from torch.utils.data import ConcatDataset
@@ -39,7 +40,11 @@ def main(cfg):
     scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
 
     experiment_dir, experiment_name = utils.get_experiment_dir(cfg)
+    experiment_dir = "./experiments/libero/mixed_datasets/1000_1000/act/5000/run_000"
+    experiment_name = "1000_1000/act/5000/run_000"
     os.makedirs(experiment_dir, exist_ok=True)
+    print('Experiment dir:', experiment_dir)
+    print('Experiment name:', experiment_name)
 
     start_epoch, steps, wandb_id = 0, 0, None
     if train_cfg.auto_continue:
@@ -74,23 +79,108 @@ def main(cfg):
     else:
         print('starting from scratch')
 
-    # 从配置文件加载两个数据集
-    print("开始构建数据集1...")
-    dataset_1 = instantiate(cfg.task.dataset_1)
-    print(f"数据集1构建成功! 长度: {len(dataset_1)}")
+    OmegaConf.set_struct(cfg, False)
+    # --- Dataset 1 parameters ---
+    params_1 = {
+        "data_prefix": "./data",
+        "suite_name": "libero",
+        "benchmark_name": "libero_object_grid",
+        "mode": "fewshot",
+        "seq_len": 16,
+        "frame_stack": 1,
+        "shape_meta": {
+            'action_dim': 7,
+            'observation': {
+                'rgb': {
+                    'agentview_rgb': (3, 128, 128),
+                    'eye_in_hand_rgb': (3, 128, 128)
+                },
+                'lowdim': {
+                    'joint_states': 7,
+                    'ee_pos': 3,
+                    'gripper_states': 2
+                },
+                'task': {
+                    'type': 'vector',
+                    'dim': 512
+                }
+            }
+        },
+        "n_demos": 10,
+        "task_ids": None,
+        "obs_seq_len": 1,
+        "load_obs": True,
+        "task_embedding_format": "clip",
+    }
 
-    print("开始构建数据集2...")
-    dataset_2 = instantiate(cfg.task.dataset_2)
-    print(f"数据集2构建成功! 长度: {len(dataset_2)}")
+    # --- 数据集2的参数 ---
+    # 您可以根据需要修改这些参数以构建不同的数据集
+    params_2 = {
+        "data_prefix": "./data",
+        "suite_name": "libero",
+        "benchmark_name": "libero_object_random",  # 例如，使用不同的 benchmark
+        "mode": "fewshot",  # 例如，使用 'train' 模式
+        "seq_len": 16,  # 例如，不同的序列长度
+        "frame_stack": 1,
+        "shape_meta": {
+            'action_dim': 7,
+            'observation': {
+                'rgb': {
+                    'agentview_rgb': (3, 128, 128),
+                    'eye_in_hand_rgb': (3, 128, 128)
+                },
+                'lowdim': {
+                    'joint_states': 7,
+                    'ee_pos': 3,
+                    'gripper_states': 2
+                },
+                'task': {
+                    'type': 'vector',
+                    'dim': 512
+                }
+            }
+        },
+        "n_demos": 1000,
+        "task_ids": [0],
+        "obs_seq_len": 1,
+        "load_obs": True,
+        "task_embedding_format": "clip",
+    }
+
+    # Prepare datasets
+    print("\nBuilding dataset 1...")
+    try:
+        dataset_1 = build_dataset(**params_1)
+        print("\nDataset 1 built successfully!")
+        print(f"Dataset 1 type: {type(dataset_1)}")
+        print(f"Dataset 1 length: {len(dataset_1)}")
+
+    except Exception as e:
+        print(f"\nError occurred while building Dataset 1: {e}")
+        import traceback
+        traceback.print_exc()
+
+    print("\n" + "="*50 + "\n")
+
+    print("Building dataset 2...")
+    try:
+        dataset_2 = build_dataset(**params_2)
+        print("\nDataset 2 built successfully!")
+        print(f"Dataset 2 type: {type(dataset_2)}")
+        print(f"Dataset 2 length: {len(dataset_2)}")
+
+    except Exception as e:
+        print(f"\nError occurred while building Dataset 2: {e}")
+        import traceback
+        traceback.print_exc()
 
     # 拼接数据集
     dataset = ConcatDataset([dataset_1, dataset_2])
-    print(f"拼接后的数据集总长度: {len(dataset)}")
-    
+    print(f"Concat dataset length: {len(dataset)}")
+
     # 验证拼接是否成功
-    assert len(dataset) == len(dataset_1) + len(dataset_2), "数据集拼接长度不正确"
-    print("数据集拼接验证成功!")
-    exit(0)
+    assert len(dataset) == len(dataset_1) + len(dataset_2), "Concat dataset length is incorrect"
+    print("Concat dataset validation successful!\n")
 
     model.preprocess_dataset(dataset, use_tqdm=train_cfg.use_tqdm)
     train_dataloader = instantiate(

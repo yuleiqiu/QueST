@@ -1,7 +1,8 @@
 
 python evaluate.py \
     task=libero_object_random \
-    checkpoint_path=./experiments/libero/LIBERO_OBJECT_GRID/act/debug/block_16/5000/stage_1/ \
+    checkpoint_path=./experiments/libero/LIBERO_OBJECT_GRID/act/debug/block_16/5000/run_000/ \
+    checkpoint_task=libero_object_random \
     algo=act \
     exp_name=debug \
     variant_name=block_16 \

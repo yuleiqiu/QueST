@@ -1,7 +1,7 @@
-
 suite_name: libero
 benchmark_name: null
-mode: all
+# mode: all
+task_id: null # Need to specify task id for singletaskrunner
 n_tasks: 10 # only work when shape_meta.task.type is "onehot", can ignore here
 demos_per_env: 50
 
@@ -28,7 +28,7 @@ shape_meta:
       gripper_states: 2
   task:
     type: vector
-    dim: 512
+    dim: 512 # dim of the text feature vector from openai/clip-vit-base-patch32
 
 dataset:
   _target_: quest.utils.libero_utils.build_dataset
