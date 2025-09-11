@@ -7,7 +7,7 @@ defaults:
 output_prefix: ./experiments
 data_prefix: ./data
 
-exp_name: debug # 
+exp_name: debug
 variant_name: null
 seed: 10000
 device: cuda:0
