@@ -7,12 +7,12 @@ defaults:
 output_prefix: ./experiments
 data_prefix: ./data
 
-exp_name: debug # 
+exp_name: debug
 variant_name: null
 seed: 10000
 device: cuda:0
 stage: null # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
-make_unique_experiment_dir: true # if true, it will create unique experiment directories with name run_00X within that experiment directory, use when debugging
+make_unique_experiment_dir: true
 logging_folder: training
 checkpoint_path: null
 
@@ -24,11 +24,10 @@ train_dataloader:
   persistent_workers: false
   pin_memory: true
   multiprocessing_context: fork
-  # prefetch_factor: 2
 
 training:
   n_epochs: 100
-  grad_clip: 100.
+  grad_clip: 100.0
   save_interval: 10 # save every ${training.save_interval} epochs
   log_interval: 100 # log every ${training.log_interval} steps
   use_amp: false
@@ -47,13 +46,13 @@ rollout:
   enabled: true
   interval: 10
   rollouts_per_env: 1
-  max_episode_length: ${task.horizon}
+  max_episode_length: ${eval:"${task.horizon}*2"}
   n_video: 0
   num_parallel_envs: 1
 
 logging:
   group: null
   mode: online # set logging.mode=disabled to disable wandb
-  project: quest # TODO: change this to your wandb project name
+  project: quest # Remember to change this to your wandb project name
   resume: auto
   save_code: true
