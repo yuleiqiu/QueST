@@ -5,7 +5,7 @@ python fake_train_concat_dataset.py --config-name=train_debug_grid.yaml \
     +task.dataset_random.n_demos=1500 \
     +task.dataset_random.task_ids='[0]' \
     algo=act \
-    exp_name=debug \
+    exp_name=\'500_1500\' \
     training.use_tqdm=true \
     training.save_all_checkpoints=true \
     training.use_amp=true \
@@ -16,6 +16,6 @@ python fake_train_concat_dataset.py --config-name=train_debug_grid.yaml \
     algo.skill_block_size=16 \
     logging.mode=disabled \
     rollout.enabled=true \
-    seed=5000
+    seed=10000
 
 # Note2: change rollout.num_parallel_envs to 1 if libero vectorized env is not working as expected.
