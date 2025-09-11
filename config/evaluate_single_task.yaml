@@ -1,39 +1,16 @@
-# Single Task Evaluation Configuration Template
-# Copy this file and modify it for your specific evaluation needs
-
 defaults:
-  - task: libero_base  # Base libero configuration
-  - algo: quest       # Algorithm configuration
   - _self_
+  - task: libero_object_random
+  - algo: quest
+  # - override hydra/launcher: basic
 
-# Override task configuration for single task evaluation
-task:
-  suite_name: libero
-  benchmark_name: LIBERO_10  # Change this: LIBERO_10, LIBERO_OBJECT, etc.
-  task_id: 0                 # Change this: specific task ID to evaluate (0-indexed)
-  mode: single               # Mode is set to single for single task evaluation
-  
-  # Keep these the same as original training
-  img_height: 128
-  img_width: 128
-  horizon: 600
-  task_embedding_format: clip
-  
-  # Override env_runner to use LiberoSingleTaskRunner
-  env_runner:
-    _target_: quest.env_runner.libero_runner.LiberoSingleTaskRunner
-    env_factory: ${task.env_factory}
-    frame_stack: ${algo.frame_stack}
-    benchmark_name: ${task.benchmark_name}
-    task_id: ${task.task_id}
-    rollouts_per_env: ${rollout.rollouts_per_env}
-    num_parallel_envs: ${rollout.num_parallel_envs}
-    max_episode_length: ${rollout.max_episode_length}
-    fps: 24
-    debug: false
-    task_embedding_format: ${task.task_embedding_format}
+# hydra:
+#   run:
+#     dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}/${now:%Y.%m.%d}/${now:%H.%M.%S}
+#   sweep:
+#     dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}
+#     subdir: ${hydra.job.num}
 
-# Training configuration (minimal for evaluation)
 training:
   use_tqdm: true
   n_epochs: 0
@@ -41,30 +18,25 @@ training:
   resume: false
   load_obs: false
 
-# Rollout configuration
+# Rollout settings
 rollout:
   enabled: true
-  rollouts_per_env: 50  # Number of evaluation episodes
-  max_episode_length: ${task.horizon}
-  num_parallel_envs: 1  # Keep this at 1 for single task evaluation
-  n_video: 3           # Number of videos to save (0 = no videos)
+  rollouts_per_env: 5
+  num_parallel_envs: 5
+  max_episode_length: ${eval:'${task.horizon} * 2'}
+  n_video: 0
+  fps: 24
+  debug: false
 
-# Experiment configuration
-exp_name: single_task_eval
+# General settings
+exp_name: debug
 variant_name: null
-seed: 10000
+seed: 6000
 device: cuda:0
-stage: 1
-
-# I/O configuration
-output_prefix: ./experiments/evaluate_single_task
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+output_prefix: ./experiments
 data_prefix: ./data
 make_unique_experiment_dir: true
 
-# Checkpoint path - UPDATE THIS to your trained model
-checkpoint_path: null  # Set to path of your checkpoint, e.g., "experiments/libero/LIBERO_10/quest/stage_1/checkpoints/latest.pth"
-
-# Example usage:
-# 1. Copy this file to config/evaluate_single_task.yaml
-# 2. Update benchmark_name, task_id, and checkpoint_path
-# 3. Run: python evaluate.py --config-name=evaluate_single_task
+# IMPORTANT: Change this to the directory where your checkpoints are stored
+checkpoint_dir: /path/to/your/checkpoint/

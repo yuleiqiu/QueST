@@ -2,7 +2,9 @@ defaults:
   - train_base
   - _self_
 
-logging_folder: prior
+stage: 1
+
+logging_folder: null
 
 training:
   n_epochs: 100
@@ -10,7 +12,7 @@ training:
 rollout:
   interval: 20 # rollout every ${rollout.interval} epochs
   rollouts_per_env: 5
-  num_parallel_envs: 5 # 5 recommended for libero, 1 for metaworld
+  num_parallel_envs: 5
 
 logging:
-  project: mixed_dataset
+  project: mixed_datasets

@@ -12,7 +12,7 @@ variant_name: null
 seed: 10000
 device: cuda:0
 stage: null # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
-make_unique_experiment_dir: true
+make_unique_experiment_dir: true # if true, it will create unique experiment directories with name run_00X within that experiment directory, use when debugging
 logging_folder: training
 checkpoint_path: null
 
@@ -27,7 +27,7 @@ train_dataloader:
 
 training:
   n_epochs: 100
-  grad_clip: 100.0
+  grad_clip: 100.
   save_interval: 10 # save every ${training.save_interval} epochs
   log_interval: 100 # log every ${training.log_interval} steps
   use_amp: false
@@ -53,6 +53,6 @@ rollout:
 logging:
   group: null
   mode: online # set logging.mode=disabled to disable wandb
-  project: quest # Remember to change this to your wandb project name
+  project: quest # TODO: change this to your wandb project name
   resume: auto
   save_code: true

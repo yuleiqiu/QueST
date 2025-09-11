@@ -50,7 +50,7 @@ def create_config_for_single_task(benchmark_name, task_id, args):
             'task_id': task_id,
             'img_height': 128,
             'img_width': 128,
-            'horizon': 500, # Some tasks may have different horizons
+            'horizon': 1000, # Some tasks may have different horizons
             'task_embedding_format': 'clip',
             'shape_meta': {
                 'action_dim': 7,
@@ -81,7 +81,7 @@ def create_config_for_single_task(benchmark_name, task_id, args):
         'rollout': {
             'rollouts_per_env': args.rollouts_per_env,
             'num_parallel_envs': args.num_parallel_envs,
-            'max_episode_length': 500,
+            'max_episode_length': 800,
             'n_video': args.n_video
         }
     })
@@ -191,10 +191,10 @@ def main():
             checkpoint_name_without_ext = os.path.splitext(checkpoint_name)[0]
             parts = checkpoint_name_without_ext.split('_')
             epoch_tag = '_'.join(parts[2:])
-            output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}_task{args.task_id}/{epoch_tag}"
+            output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}/task{args.task_id}/{epoch_tag}"
         else:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}_task{args.task_id}_{timestamp}"
+            output_dir = f"./experiments/evaluate_single_task/{args.benchmark_name}/task{args.task_id}/{timestamp}"
     else:
         output_dir = args.output_dir
     

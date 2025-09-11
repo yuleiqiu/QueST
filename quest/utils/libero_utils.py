@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Any, Dict, List, Optional, Literal
 
 import gymnasium
 import numpy as np
@@ -26,6 +27,25 @@ np.set_printoptions(suppress=True)
 
 
 class LiberoVectorWrapper(gymnasium.Env):
+    """
+    Wrapper for vectorized environments in LIBERO.
+
+    Note for seed:
+    
+    DummyVectorEnv (Single Environment):
+
+    - The random seed is determined by the NumPy global random state of the main process.
+    - If no seed is set after the program starts, the system default seed (usually based on system time) is used.
+    - Each program run will exhibit different random behavior unless the seed is manually set.
+
+    SubprocVectorEnv (Multiple Environments):
+
+    - Each subprocess has an independent random state, initialized based on the system state at the time of process creation.
+    - Random seeds for different subprocesses are typically distinct since they are created at different times.
+    - Each program run will result in new, independent random seeds for all subprocesses.
+
+    Important Note: As warned in the code comments, to ensure reproducibility, explicitly call the `env.seed()` method to set the seed. Otherwise, different environment instances may produce identical or unpredictable random behavior.
+    """
     def __init__(self,
                  env_factory,
                  env_num):
@@ -78,6 +98,9 @@ class LiberoVectorWrapper(gymnasium.Env):
         for key in obs_out:
             obs_out[key] = np.array(obs_out[key])
         return obs_out
+    
+    def close(self):
+        self._env.close()
 
 
 class LiberoFrameStack(FrameStackObservationFixed):
@@ -168,43 +191,65 @@ class LiberoWrapper(gymnasium.Env):
     
     def render(self, *args, **kwargs):
         return self.render_out
+    
+    def close(self):
+        self.env.env.close()
 
-def build_dataset(data_prefix: str,
-                  suite_name: str,
-                  benchmark_name: str,
-                  mode: str,
-                  seq_len: int,
-                  frame_stack: int,
-                  shape_meta: Dict[str, Any],
-                  n_demos: int,
-                  task_ids: List[int] = None,
-                  extra_obs_modality: Optional[dict] = None,
-                  obs_seq_len: int = 1,
-                  load_obs: bool = True,
-                  task_embedding_format: str = "clip",
-                  ):
+def build_dataset(
+    data_prefix: str,
+    suite_name: str,
+    benchmark_name: str,
+    mode: Optional[Literal["all", "fewshot"]],
+    seq_len: int,
+    frame_stack: int,
+    shape_meta: Dict[str, Any],
+    n_demos: int,
+    task_ids: Optional[List[int]] = None,
+    extra_obs_modality: Optional[Dict[str, List[str]]] = None,
+    obs_seq_len: int = 1,
+    load_obs: bool = True,
+    task_embedding_format: Literal["clip", "bert", "gpt2", "roberta"] = "clip",
+) -> ConcatDataset:
     """
-    Build a dataset of a benchmark. If not specified, use all tasks in this benchmark.
+    Build a concatenated dataset across selected LIBERO tasks in a benchmark.
+
+    This utility gathers per-task sequence datasets, attaches a task text embedding
+    to each item, and returns a torch.utils.data.ConcatDataset over all chosen tasks.
 
     Args:
-        data_prefix (str): The prefix path to the dataset.
-        suite_name (str): The name of the suite.
-        benchmark_name (str): The name of the benchmark.
-        mode (str): The mode of the dataset (e.g., "train", "val", "test").
-        seq_len (int): The length of the sequences.
-        frame_stack (int): The number of frames to stack.
-        shape_meta (dict): Metadata about the shapes of the observations.
-        n_demos (int): The number of demonstrations of each task. You can select only a subset of demos.
-        task_ids (List[int]): Task IDs to include in the dataset. You can select only a subset of tasks.
-        extra_obs_modality (Optional[dict]): Additional observation modalities to include.
-        obs_seq_len (int): The length of the observation sequences.
-        load_obs (bool): Whether to load the observations.
-        task_embedding_format (str): The format of the task embeddings.
+        data_prefix: Root directory that contains data for the suite (e.g. ``data/``).
+        suite_name: Name of the data suite folder under ``data_prefix`` (e.g. ``libero``).
+        benchmark_name: Benchmark class name registered in LIBERO (e.g. ``LIBERO_90``).
+        mode: One of ``"all"`` or ``"fewshot"``. Use ``"all"`` to include all
+            available demonstrations (subject to the ``n_demos`` cap), or ``"fewshot"``
+            to select a subset of demos per task.
+        seq_len: Number of consecutive timesteps per sampled sequence.
+        frame_stack: Number of past frames to stack for each observation key.
+        shape_meta: Observation shape metadata. Must include
+            ``shape_meta['observation']['rgb']`` and ``['lowdim']`` maps.
+        n_demos: Number of demonstrations to include per task (upper bound).
+        task_ids: Optional explicit list of task IDs to include. If ``None``, use all
+            tasks in the benchmark.
+        extra_obs_modality: Optional additional observation modalities to add on top
+            of what ``shape_meta`` specifies. Example::
+
+                {"rgb": ["agentview_image"], "low_dim": ["robot_state"]}
+
+        obs_seq_len: For multi-frame observations, number of frames per timestep.
+        load_obs: If ``True``, load observations; if ``False``, only actions are read.
+        task_embedding_format: Which text encoder to use for task language embeddings.
+            One of: ``"clip"``, ``"bert"``, ``"gpt2"``, ``"roberta"``. Default ``"clip"``.
+
+    Returns:
+        ConcatDataset: A concatenation of per-task datasets where each sample also
+        includes ``{"task_emb": Tensor, "task_id": int}``.
     """
     benchmark = get_benchmark(benchmark_name)()
     n_tasks = benchmark.n_tasks
     task_list = task_ids if task_ids is not None else list(range(n_tasks))
-    few_shot_demos = np.linspace(0, n_demos-1, n_demos, dtype=int).tolist() if mode == 'fewshot' else None
+    few_shot_demos = (
+        np.linspace(0, n_demos - 1, n_demos, dtype=int).tolist() if mode == "fewshot" else None
+    )
     few_shot_demos_list = [f"demo_{i}" for i in few_shot_demos] if few_shot_demos is not None else None
     
     manip_datasets = []
@@ -256,19 +301,56 @@ def build_dataset(data_prefix: str,
     return concat_dataset
 
 def get_dataset(
-    dataset_path,
-    obs_modality,
-    seq_len=1,
-    obs_seq_len=1,
-    frame_stack=1,
-    filter_key=None,
-    hdf5_cache_mode="low_dim",
-    load_obs=True,
-    few_demos=None,
-    n_demos=None,
-    ):
+    dataset_path: str,
+    obs_modality: Dict[str, List[str]],
+    seq_len: int = 1,
+    obs_seq_len: int = 1,
+    frame_stack: int = 1,
+    filter_key: Optional[str] = None,
+    hdf5_cache_mode: str = "low_dim",
+    load_obs: bool = True,
+    few_demos: Optional[List[str]] = None,
+    n_demos: Optional[int] = None,
+    ) -> SequenceDataset:
     """
-    Retrieve a SequenceDataset for a specific task.
+    Retrieve a SequenceDataset of a specific task.
+
+    Args:
+        dataset_path (str):
+            Path to the HDF5 dataset (or directory containing it) for a single task.
+
+        obs_modality (Dict[str, List[str]]):
+            Observation modalities to include. Typical keys are 'rgb' and 'low_dim',
+            each mapping to a list of observation keys to load.
+
+        seq_len (int, optional):
+            Number of consecutive timesteps per sampled sequence. Defaults to 1.
+            
+        obs_seq_len (int, optional):
+            Number of observation frames per step (for multi-frame obs). Defaults to 1.
+
+        frame_stack (int, optional):
+            Number of past frames to stack for each observation. Defaults to 1.
+
+        filter_key (Optional[str], optional):
+            Attribute name used to filter trajectories (passed to `filter_by_attribute`).
+            Defaults to None.
+
+        hdf5_cache_mode (str, optional):
+            Strategy for caching dataset contents, e.g., 'low_dim'. Defaults to 'low_dim'.
+
+        load_obs (bool, optional):
+            Whether to load observation arrays. If False, only actions are read. Defaults to True.
+
+        few_demos (Optional[List[str]], optional):
+            Optional subset of demonstration names to include (e.g., ["demo_0", "demo_3"]).
+            Defaults to None, i.e. use all demos.
+
+        n_demos (Optional[int], optional):
+            Limit the number of demonstrations to include. If None, use all. Defaults to None.
+
+    Returns:
+        SequenceDataset: A dataset that yields fixed-length sequences of observations and actions.
     """
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():

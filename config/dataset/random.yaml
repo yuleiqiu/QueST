@@ -1,0 +1,23 @@
+# Dataset config for the LIBERO random benchmark variant.
+# Composed via defaults: `- dataset@task.dataset_random: random`
+# Injected under node: `task.dataset_random`
+# Relies on higher-level keys:
+#   - data_prefix
+#   - task.suite_name, task.mode, task.shape_meta, task.task_embedding_format
+#   - algo.dataset.seq_len, algo.dataset.frame_stack, algo.dataset.obs_seq_len
+#   - training.load_obs
+# Example override: `+task.dataset_random.n_demos=10`
+
+_target_: quest.utils.libero_utils.build_dataset
+data_prefix: ${data_prefix}
+suite_name: ${task.suite_name}
+benchmark_name: LIBERO_OBJECT_RANDOM
+mode: ${task.mode}
+seq_len: ${algo.dataset.seq_len}
+frame_stack: ${algo.dataset.frame_stack}
+shape_meta: ${task.shape_meta}
+n_demos: null # Make sure to override this when using the grid dataset
+task_ids: null
+obs_seq_len: ${algo.dataset.obs_seq_len}
+load_obs: ${training.load_obs}
+task_embedding_format: ${task.task_embedding_format}
