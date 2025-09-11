@@ -1,0 +1,71 @@
+# Hydra defaults composition:
+# - '/dataset@task.dataset_grid: grid' loads config/dataset/grid.yaml (absolute group path) and injects it under the key path 'task.dataset_grid'.
+# - '/dataset@task.dataset_random: random' loads config/dataset/random.yaml (absolute group path) and injects it under the key path 'task.dataset_random'.
+# - '_self_' ensures this file is applied after the above defaults so values here can override them if needed.
+defaults:
+  # Use absolute group paths (leading '/') so Hydra doesn't resolve them under the current package 'task/'.
+  - /dataset@dataset_grid: grid
+  - /dataset@dataset_random: random
+  - _self_
+
+suite_name: libero
+mode: fewshot
+  # Note: benchmark_name/n_demos/task_ids now live inside
+  #       `task.dataset_grid` and `task.dataset_random` respectively.
+
+task_embedding_format: clip
+img_height: 128
+img_width: 128
+horizon: 500
+
+shape_meta:
+  action_dim: 7
+  observation:
+    rgb:
+      agentview_rgb:
+        - 3
+        - ${task.img_height}
+        - ${task.img_width}
+      eye_in_hand_rgb:
+        - 3
+        - ${task.img_height}
+        - ${task.img_width}
+    lowdim:
+      joint_states: 7
+      ee_pos: 3
+      gripper_states: 2
+  task:
+    type: vector
+    dim: 512 # this is to match the dimension of feature vector from openai/clip-vit-base-patch32
+
+obs_key_mapping:
+  agentview_rgb: agentview_image
+  eye_in_hand_rgb: robot0_eye_in_hand_image
+  gripper_states: robot0_gripper_qpos
+  joint_states: robot0_joint_pos
+  ee_pos: robot0_eef_pos
+
+
+
+env_factory:
+  _target_: quest.utils.libero_utils.LiberoWrapper
+  _partial_: true 
+  shape_meta: ${task.shape_meta}
+  obs_key_mapping: ${task.obs_key_mapping}
+  img_height: ${task.img_height}
+  img_width: ${task.img_width}
+  device: ${device}
+
+env_runner:
+  _target_: quest.env_runner.libero_runner.LiberoRunner
+  env_factory: ${task.env_factory}
+  frame_stack: ${algo.frame_stack}
+  # Runner uses the grid dataset's benchmark by default; override if needed via CLI
+  benchmark_name: ${task.dataset_grid.benchmark_name}
+  mode: ${task.mode}
+  rollouts_per_env: ${rollout.rollouts_per_env}
+  num_parallel_envs: ${rollout.num_parallel_envs}
+  max_episode_length: ${rollout.max_episode_length}
+  fps: 24
+  debug: false
+  task_embedding_format: ${task.task_embedding_format}
