@@ -1,29 +1,19 @@
-import copy
 from collections import OrderedDict
+import os
 
+import gymnasium
+import metaworld
+import mujoco
 import numpy as np
+from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
+from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
+from metaworld.policies import *
+from torch.utils.data import ConcatDataset, Dataset
+
 import quest.utils.file_utils as FileUtils
 import quest.utils.obs_utils as ObsUtils
-from PIL import Image
 from quest.utils.dataset import SequenceDataset
-from torch.utils.data import Dataset
 from quest.utils.frame_stack import FrameStackObservationFixed
-import torch
-import torch.nn as nn
-import gymnasium
-from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
-import math
-import mujoco
-import os
-from torch.utils.data import ConcatDataset
-import metaworld
-
-from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
-
-from pyinstrument import Profiler
-
-
-from metaworld.policies import *
 
 
 _policies = OrderedDict(
