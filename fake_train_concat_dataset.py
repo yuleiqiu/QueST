@@ -42,10 +42,11 @@ def print_data_structure(data, indent=0):
         print(f"{prefix}type {type(data)}")
 
 
-@hydra.main(config_path="config", config_name="train_prior", version_base=None)
+@hydra.main(config_path="config", version_base=None)
 def main(cfg):
-    # # print the entire config
-    # print(OmegaConf.to_yaml(cfg))
+    # print the entire config
+    print(OmegaConf.to_yaml(cfg))
+    # breakpoint()
 
     device = cfg.device
     seed = cfg.seed
@@ -101,96 +102,10 @@ def main(cfg):
     else:
         print(colored('\nStarting from scratch', 'yellow'))
 
-
-    OmegaConf.set_struct(cfg, False)
-    # --- Dataset 1 parameters ---
-    params_1 = {
-        "data_prefix": "./data",
-        "suite_name": "libero",
-        "benchmark_name": "libero_object_grid",
-        "mode": "fewshot",
-        "seq_len": 16,
-        "frame_stack": 1,
-        "shape_meta": {
-            'action_dim': 7,
-            'observation': {
-                'rgb': {
-                    'agentview_rgb': (3, 128, 128),
-                    'eye_in_hand_rgb': (3, 128, 128)
-                },
-                'lowdim': {
-                    'joint_states': 7,
-                    'ee_pos': 3,
-                    'gripper_states': 2
-                },
-                'task': {
-                    'type': 'vector',
-                    'dim': 512
-                }
-            }
-        },
-        "n_demos": 15,
-        "task_ids": None,
-        "obs_seq_len": 1,
-        "load_obs": True,
-        "task_embedding_format": "clip",
-    }
-
-    # --- 数据集2的参数 ---
-    # 您可以根据需要修改这些参数以构建不同的数据集
-    params_2 = {
-        "data_prefix": "./data",
-        "suite_name": "libero",
-        "benchmark_name": "libero_object_random",  # 例如，使用不同的 benchmark
-        "mode": "fewshot",  # 例如，使用 'train' 模式
-        "seq_len": 16,  # 例如，不同的序列长度
-        "frame_stack": 1,
-        "shape_meta": {
-            'action_dim': 7,
-            'observation': {
-                'rgb': {
-                    'agentview_rgb': (3, 128, 128),
-                    'eye_in_hand_rgb': (3, 128, 128)
-                },
-                'lowdim': {
-                    'joint_states': 7,
-                    'ee_pos': 3,
-                    'gripper_states': 2
-                },
-                'task': {
-                    'type': 'vector',
-                    'dim': 512
-                }
-            }
-        },
-        "n_demos": 500,
-        "task_ids": [0],
-        "obs_seq_len": 1,
-        "load_obs": True,
-        "task_embedding_format": "clip",
-    }
-
-    # # Prepare dataset parameters
-    # base_dataset_cfg = deepcopy(cfg.task.dataset)
-    # dataset_1_cfg = OmegaConf.merge(base_dataset_cfg, OmegaConf.create(params_1))
-    # dataset_2_cfg = OmegaConf.merge(base_dataset_cfg, OmegaConf.create(params_2))
-
-    # # 从配置文件加载两个数据集
-    # print("Building dataset 1...")
-    # dataset_1 = instantiate(dataset_1_cfg)
-    # print(f"Dataset 1 built successfully! Length: {len(dataset_1)}")
-
-    # print("Building dataset 2...")
-    # dataset_2 = instantiate(dataset_2_cfg)
-    # print(f"Dataset 2 built successfully! Length: {len(dataset_2)}")
-
+    # Prepare dataset
     print("\nBuilding dataset 1...")
     try:
-        dataset_1 = build_dataset(**params_1)
-        print("\nDataset 1 built successfully!")
-        print(f"Dataset 1 type: {type(dataset_1)}")
-        print(f"Dataset 1 length: {len(dataset_1)}")
-
+        dataset_grid = hydra.utils.instantiate(cfg.task.dataset_grid)
     except Exception as e:
         print(f"\nError occurred while building Dataset 1: {e}")
         import traceback
@@ -200,22 +115,18 @@ def main(cfg):
 
     print("Building dataset 2...")
     try:
-        dataset_2 = build_dataset(**params_2)
-        print("\nDataset 2 built successfully!")
-        print(f"Dataset 2 type: {type(dataset_2)}")
-        print(f"Dataset 2 length: {len(dataset_2)}")
-
+        dataset_random = hydra.utils.instantiate(cfg.task.dataset_random)
     except Exception as e:
         print(f"\nError occurred while building Dataset 2: {e}")
         import traceback
         traceback.print_exc()
 
     # 拼接数据集
-    dataset = ConcatDataset([dataset_1, dataset_2])
+    dataset = ConcatDataset([dataset_grid, dataset_random])
     print(f"Concat dataset length: {len(dataset)}")
 
     # 验证拼接是否成功
-    assert len(dataset) == len(dataset_1) + len(dataset_2), "Concat dataset length is incorrect"
+    assert len(dataset) == len(dataset_grid) + len(dataset_random), "Concat dataset length is incorrect"
     print("Concat dataset validation successful!\n")
 
     model.preprocess_dataset(dataset, use_tqdm=train_cfg.use_tqdm)
@@ -228,7 +139,7 @@ def main(cfg):
         print("Structure of a batch:")
         print_data_structure(data)
         break
-    breakpoint()
+    # breakpoint()
 
     """
     Dataset batch structure example
@@ -256,13 +167,13 @@ def main(cfg):
     print("\nModel parameters:")
     for name, param in model.named_parameters():
         print(f"{name}: {param.shape}, requires_grad={param.requires_grad}")
-    breakpoint()
+    # breakpoint()
 
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
         rollout_results = env_runner.run(model, n_video=0, do_tqdm=train_cfg.use_tqdm) # for debugging env runner before starting training
         print(rollout_results)
-        breakpoint()
+        # breakpoint()
     
     # print('Saving to:', experiment_dir)
     # print('Experiment name:', experiment_name)
