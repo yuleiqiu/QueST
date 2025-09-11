@@ -5,17 +5,14 @@ import wandb
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
-from pathlib import Path
-import warnings
 
 import torch
 import torch.nn as nn
 import quest.utils.utils as utils
-from quest.utils.libero_utils import build_dataset
 from pyinstrument import Profiler
 from quest.utils.logger import Logger
 from torch.utils.data import ConcatDataset
-import gc
+from termcolor import colored
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -33,18 +30,13 @@ def main(cfg):
     model.to(device)
     model.train()
 
-    # start training
+    # Prepare optimizers and schedulers
     optimizers = model.get_optimizers()
     schedulers = model.get_schedulers(optimizers)
-
     scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
 
-    experiment_dir, experiment_name = utils.get_experiment_dir(cfg)
-    experiment_dir = "./experiments/libero/mixed_datasets/1000_1000/act/5000/run_000"
-    experiment_name = "1000_1000/act/5000/run_000"
+    experiment_dir, experiment_name = utils.get_experiment_dir_for_mixed_dataset(cfg)
     os.makedirs(experiment_dir, exist_ok=True)
-    print('Experiment dir:', experiment_dir)
-    print('Experiment name:', experiment_name)
 
     start_epoch, steps, wandb_id = 0, 0, None
     if train_cfg.auto_continue:
@@ -77,84 +69,12 @@ def main(cfg):
             steps = state_dict['steps']
             wandb_id = state_dict['wandb_id']
     else:
-        print('starting from scratch')
+        print(colored('\nStarting from scratch', 'yellow'))
 
-    OmegaConf.set_struct(cfg, False)
-    # --- Dataset 1 parameters ---
-    params_1 = {
-        "data_prefix": "./data",
-        "suite_name": "libero",
-        "benchmark_name": "libero_object_grid",
-        "mode": "fewshot",
-        "seq_len": 16,
-        "frame_stack": 1,
-        "shape_meta": {
-            'action_dim': 7,
-            'observation': {
-                'rgb': {
-                    'agentview_rgb': (3, 128, 128),
-                    'eye_in_hand_rgb': (3, 128, 128)
-                },
-                'lowdim': {
-                    'joint_states': 7,
-                    'ee_pos': 3,
-                    'gripper_states': 2
-                },
-                'task': {
-                    'type': 'vector',
-                    'dim': 512
-                }
-            }
-        },
-        "n_demos": 10,
-        "task_ids": None,
-        "obs_seq_len": 1,
-        "load_obs": True,
-        "task_embedding_format": "clip",
-    }
-
-    # --- 数据集2的参数 ---
-    # 您可以根据需要修改这些参数以构建不同的数据集
-    params_2 = {
-        "data_prefix": "./data",
-        "suite_name": "libero",
-        "benchmark_name": "libero_object_random",  # 例如，使用不同的 benchmark
-        "mode": "fewshot",  # 例如，使用 'train' 模式
-        "seq_len": 16,  # 例如，不同的序列长度
-        "frame_stack": 1,
-        "shape_meta": {
-            'action_dim': 7,
-            'observation': {
-                'rgb': {
-                    'agentview_rgb': (3, 128, 128),
-                    'eye_in_hand_rgb': (3, 128, 128)
-                },
-                'lowdim': {
-                    'joint_states': 7,
-                    'ee_pos': 3,
-                    'gripper_states': 2
-                },
-                'task': {
-                    'type': 'vector',
-                    'dim': 512
-                }
-            }
-        },
-        "n_demos": 1000,
-        "task_ids": [0],
-        "obs_seq_len": 1,
-        "load_obs": True,
-        "task_embedding_format": "clip",
-    }
-
-    # Prepare datasets
+    # Prepare dataset
     print("\nBuilding dataset 1...")
     try:
-        dataset_1 = build_dataset(**params_1)
-        print("\nDataset 1 built successfully!")
-        print(f"Dataset 1 type: {type(dataset_1)}")
-        print(f"Dataset 1 length: {len(dataset_1)}")
-
+        dataset_grid = hydra.utils.instantiate(cfg.task.dataset_grid)
     except Exception as e:
         print(f"\nError occurred while building Dataset 1: {e}")
         import traceback
@@ -164,22 +84,16 @@ def main(cfg):
 
     print("Building dataset 2...")
     try:
-        dataset_2 = build_dataset(**params_2)
-        print("\nDataset 2 built successfully!")
-        print(f"Dataset 2 type: {type(dataset_2)}")
-        print(f"Dataset 2 length: {len(dataset_2)}")
-
+        dataset_random = hydra.utils.instantiate(cfg.task.dataset_random)
     except Exception as e:
         print(f"\nError occurred while building Dataset 2: {e}")
         import traceback
         traceback.print_exc()
 
-    # 拼接数据集
-    dataset = ConcatDataset([dataset_1, dataset_2])
+    # Concat datasets and validate
+    dataset = ConcatDataset([dataset_grid, dataset_random])
     print(f"Concat dataset length: {len(dataset)}")
-
-    # 验证拼接是否成功
-    assert len(dataset) == len(dataset_1) + len(dataset_2), "Concat dataset length is incorrect"
+    assert len(dataset) == len(dataset_grid) + len(dataset_random), "Concat dataset length is incorrect"
     print("Concat dataset validation successful!\n")
 
     model.preprocess_dataset(dataset, use_tqdm=train_cfg.use_tqdm)
@@ -189,30 +103,30 @@ def main(cfg):
 
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
-        # rollout_results = env_runner.run(model, n_video=cfg.rollout.n_video, do_tqdm=train_cfg.use_tqdm) # for debugging env runner before starting training
-    
+
     print('Saving to:', experiment_dir)
     print('Experiment name:', experiment_name)
 
     wandb.init(
         dir=experiment_dir,
-        name=experiment_name,
+        name=cfg.exp_name if cfg.exp_name != "" else experiment_name,
         config=OmegaConf.to_container(cfg, resolve=True),
         id=wandb_id,
         **cfg.logging
     )
-
     logger = Logger(train_cfg.log_interval)
 
-    print('Training...')
+    print(colored(f"\nStart training\n", "green"))
 
     for epoch in range(start_epoch, train_cfg.n_epochs + 1):
         t0 = time.time()
         model.train()
         training_loss = 0.0
+
         if train_cfg.do_profile:
             profiler = Profiler()
             profiler.start()
+
         for idx, data in enumerate(tqdm(train_dataloader, disable=not train_cfg.use_tqdm)):
             data = utils.map_tensor_to_device(data, device)
             
@@ -222,7 +136,6 @@ def main(cfg):
             with torch.autograd.set_detect_anomaly(False):
                 with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
                     loss, info = model.compute_loss(data)
-            
                 scaler.scale(loss).backward()
             
             for optimizer in optimizers:
@@ -234,7 +147,6 @@ def main(cfg):
 
             for optimizer in optimizers:
                 scaler.step(optimizer)
-            
             scaler.update()
 
             info.update({
@@ -243,8 +155,9 @@ def main(cfg):
             if train_cfg.grad_clip is not None:
                 info.update({
                     "grad_norm": grad_norm.item(),
-                })  
-            info = {cfg.logging_folder: info}
+                })
+            if cfg.logging_folder is not None:
+                info = {cfg.logging_folder: info}
             training_loss += loss.item()
             steps += 1
             logger.update(info, steps)
@@ -288,11 +201,13 @@ def main(cfg):
         if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
             rollout_results = env_runner.run(model, n_video=cfg.rollout.n_video, do_tqdm=train_cfg.use_tqdm)
             print(
-                f"[info]     success rate: {rollout_results['rollout']['overall_success_rate']:1.3f} \
+                f"[info] success rate: {rollout_results['rollout']['overall_success_rate']:1.3f} \
                     | environments solved: {rollout_results['rollout']['environments_solved']}")
             logger.log(rollout_results, step=steps)
         [scheduler.step() for scheduler in schedulers]
-    print("[info] finished learning\n")
+
+
+    print(colored(f"Finish training!\n", "green"))
     wandb.finish()
 
 if __name__ == "__main__":
