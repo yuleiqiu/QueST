@@ -4,7 +4,7 @@ defaults:
 
 stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 
-logging_folder: prior
+logging_folder: null
 
 training:
   n_epochs: 100 # on libero: 20 for quest and 100 for other algos, 100 on metaworld for all algos
