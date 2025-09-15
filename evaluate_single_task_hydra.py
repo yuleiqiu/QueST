@@ -77,6 +77,8 @@ import os
 import pdb
 import time
 import types
+from typing import List, Optional
+import fnmatch
 from pprint import pprint
 
 import hydra
@@ -89,15 +91,17 @@ import quest.utils.utils as utils
 from quest.env_runner.libero_runner import LiberoSingleTaskRunner
 
 
-def load_model_from_checkpoint(config: DictConfig):
+def load_model_from_checkpoint(config: DictConfig, checkpoint_path: Optional[str] = None):
     """
     Load model from checkpoint
 
     Args:
         config (DictConfig): Hydra configuration object.
+        checkpoint_path (Optional[str]): Explicit checkpoint file path. When None, fall back to interactive selection.
     """
-    print(f"Loading checkpoint from: {config.checkpoint_dir}")
-    checkpoint_path = utils.get_checkpoint_with_selection(config.checkpoint_dir)
+    if checkpoint_path is None:
+        print(f"Loading checkpoint from: {config.checkpoint_dir}")
+        checkpoint_path = utils.get_checkpoint_with_selection(config.checkpoint_dir)
 
     # Load model state
     state_dict = utils.load_state(checkpoint_path)
@@ -126,6 +130,32 @@ def load_model_from_checkpoint(config: DictConfig):
     print(f"Model loaded successfully on {config.device}")
 
     return model
+
+
+def list_checkpoints(checkpoint_dir: str, pattern: Optional[str] = None) -> List[str]:
+    """List checkpoint files in a directory.
+
+    - Includes files ending with .pth or .pt by default.
+    - Optional simple glob-style pattern (e.g., "*epoch_*.pth").
+    - Returns sorted list for reproducible order.
+    """
+    if not os.path.isdir(checkpoint_dir):
+        raise ValueError(f"Expected a directory for checkpoint_dir, got: {checkpoint_dir}")
+
+    files = []
+    for f in os.listdir(checkpoint_dir):
+        full = os.path.join(checkpoint_dir, f)
+        if not os.path.isfile(full):
+            continue
+        if f.endswith((".pth", ".pt")):
+            files.append(f)
+
+    if pattern:
+        files = [f for f in files if fnmatch.fnmatch(f, pattern)]
+
+    # Sort alphabetically; names like epoch_0010 will be in numeric order
+    files.sort()
+    return [os.path.join(checkpoint_dir, f) for f in files]
 
 
 def create_env_runner(config):
@@ -189,11 +219,11 @@ def main(config: DictConfig):
     # print(OmegaConf.to_yaml(config))
     # pdb.set_trace()
 
-    # Load model
-    model = load_model_from_checkpoint(config)
-    # pdb.set_trace()
+    # Determine single vs. multi-checkpoint evaluation
+    eval_all = getattr(config, 'eval_all_checkpoints', False)
+    pattern = getattr(config, 'checkpoint_pattern', None)
 
-    # Create environment runner
+    # Create environment runner once; reuse across checkpoints
     env_runner = create_env_runner(config)
     
     # Get task name for display
@@ -209,49 +239,124 @@ def main(config: DictConfig):
     print(f"Device: {config.device}")
     print("=" * 40)
     
-    # Define video save callback function
-    def save_video_callback_fn(video_chw, env_name, idx):
-        save_video_fn(video_chw, env_name, idx, save_dir, config.rollout.fps)
-    
-    # Run evaluation
-    print("Running evaluation...")
-    start_time = time.time()
-    
-    rollout_results = env_runner.run(
-        model, 
-        n_video=config.rollout.n_video,
-        do_tqdm=True,
-        save_video_fn=save_video_callback_fn if config.rollout.n_video > 0 else None
-    )
-    
-    end_time = time.time()
-    evaluation_time = end_time - start_time
-    
-    # Print results
-    print(f"\n=== Results ===")
-    print(f"Success Rate: {rollout_results['rollout']['overall_success_rate']:.3f}")
-    print(f"Average Reward: {rollout_results['rollout']['overall_average_reward']:.3f}")
-    print(f"Environments Solved: {rollout_results['rollout']['environments_solved']}")
-    if task_name in rollout_results['rollout_success_rate']:
-        print(f"Task-specific Success Rate: {rollout_results['rollout_success_rate'][task_name]:.3f}")
-    print(f"Evaluation Time: {evaluation_time:.2f} seconds")
-    
-    # Save results
-    results_data = {
-        'args': OmegaConf.to_container(config),
-        'results': rollout_results,
-        'evaluation_time': evaluation_time,
-        'task_name': task_name
-    }
-    
-    results_file = os.path.join(save_dir, 'results.json')
-    with open(results_file, 'w') as f:
-        json.dump(results_data, f, indent=2)
-    
-    print(f"Results saved to: {results_file}")
-    
-    if config.rollout.n_video > 0:
-        print(f"Videos saved to: {os.path.join(save_dir, 'videos')}")
+    if eval_all and os.path.isdir(config.checkpoint_dir):
+        print("Evaluating ALL checkpoints in directory...")
+        checkpoints = list_checkpoints(config.checkpoint_dir, pattern)
+        if len(checkpoints) == 0:
+            raise ValueError(f"No checkpoints found in {config.checkpoint_dir} with pattern: {pattern or '*.pth|*.pt'}")
+
+        summary = []
+        for i, ckpt_path in enumerate(checkpoints, 1):
+            ckpt_name = os.path.splitext(os.path.basename(ckpt_path))[0]
+            ckpt_save_dir = os.path.join(save_dir, ckpt_name)
+            os.makedirs(ckpt_save_dir, exist_ok=True)
+
+            print(f"\n[{i}/{len(checkpoints)}] Running evaluation for checkpoint: {ckpt_name}")
+            model = load_model_from_checkpoint(config, checkpoint_path=ckpt_path)
+
+            # Per-checkpoint video callback
+            def save_video_callback_fn(video_chw, env_name, idx, _dir=ckpt_save_dir):
+                save_video_fn(video_chw, env_name, idx, _dir, config.rollout.fps)
+
+            start_time = time.time()
+            rollout_results = env_runner.run(
+                model,
+                n_video=config.rollout.n_video,
+                do_tqdm=True,
+                save_video_fn=save_video_callback_fn if config.rollout.n_video > 0 else None,
+            )
+            evaluation_time = time.time() - start_time
+
+            # Persist per-ckpt results
+            results_data = {
+                'args': OmegaConf.to_container(config),
+                'checkpoint': ckpt_path,
+                'results': rollout_results,
+                'evaluation_time': evaluation_time,
+                'task_name': task_name,
+            }
+            results_file = os.path.join(ckpt_save_dir, 'results.json')
+            with open(results_file, 'w') as f:
+                json.dump(results_data, f, indent=2)
+
+            # Print short metrics
+            print(f"Success Rate: {rollout_results['rollout']['overall_success_rate']:.3f} | Avg Reward: {rollout_results['rollout']['overall_average_reward']:.3f} | Time: {evaluation_time:.1f}s")
+            if config.rollout.n_video > 0:
+                print(f"Videos saved to: {os.path.join(ckpt_save_dir, 'videos')}")
+
+            summary.append({
+                'checkpoint': ckpt_path,
+                'checkpoint_name': ckpt_name,
+                'overall_success_rate': rollout_results['rollout']['overall_success_rate'],
+                'overall_average_reward': rollout_results['rollout']['overall_average_reward'],
+                'environments_solved': rollout_results['rollout']['environments_solved'],
+                'task_success_rate': rollout_results['rollout_success_rate'].get(task_name, None),
+                'evaluation_time_sec': evaluation_time,
+            })
+
+            # Free GPU memory before next checkpoint
+            try:
+                del model
+                if str(config.device).startswith('cuda') and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+
+        # Save summary at top-level save_dir
+        summary_path = os.path.join(save_dir, 'summary.json')
+        with open(summary_path, 'w') as f:
+            json.dump({
+                'task_name': task_name,
+                'num_checkpoints': len(summary),
+                'checkpoints': summary,
+            }, f, indent=2)
+        print(f"\nSummary saved to: {summary_path}")
+
+    else:
+        # Single-checkpoint flow (interactive selection if a directory is given)
+        model = load_model_from_checkpoint(config)
+
+        # Define video save callback function
+        def save_video_callback_fn(video_chw, env_name, idx):
+            save_video_fn(video_chw, env_name, idx, save_dir, config.rollout.fps)
+
+        # Run evaluation
+        print("Running evaluation...")
+        start_time = time.time()
+
+        rollout_results = env_runner.run(
+            model,
+            n_video=config.rollout.n_video,
+            do_tqdm=True,
+            save_video_fn=save_video_callback_fn if config.rollout.n_video > 0 else None
+        )
+
+        evaluation_time = time.time() - start_time
+
+        # Print results
+        print(f"\n=== Results ===")
+        print(f"Success Rate: {rollout_results['rollout']['overall_success_rate']:.3f}")
+        print(f"Average Reward: {rollout_results['rollout']['overall_average_reward']:.3f}")
+        print(f"Environments Solved: {rollout_results['rollout']['environments_solved']}")
+        if task_name in rollout_results['rollout_success_rate']:
+            print(f"Task-specific Success Rate: {rollout_results['rollout_success_rate'][task_name]:.3f}")
+        print(f"Evaluation Time: {evaluation_time:.2f} seconds")
+
+        # Save results
+        results_data = {
+            'args': OmegaConf.to_container(config),
+            'results': rollout_results,
+            'evaluation_time': evaluation_time,
+            'task_name': task_name
+        }
+
+        results_file = os.path.join(save_dir, 'results.json')
+        with open(results_file, 'w') as f:
+            json.dump(results_data, f, indent=2)
+
+        print(f"Results saved to: {results_file}")
+        if config.rollout.n_video > 0:
+            print(f"Videos saved to: {os.path.join(save_dir, 'videos')}")
 
 
 if __name__ == "__main__":
