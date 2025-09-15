@@ -2,14 +2,14 @@ defaults:
   - _self_
   - task: libero_object_random
   - algo: quest
-  # - override hydra/launcher: basic
+  - override hydra/launcher: basic
 
-# hydra:
-#   run:
-#     dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}/${now:%Y.%m.%d}/${now:%H.%M.%S}
-#   sweep:
-#     dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}
-#     subdir: ${hydra.job.num}
+hydra:
+  # run:
+  #   dir: ./experiments/evaluate_single_task/${task.suite_name}${task.task_id}/${now:%Y.%m.%d}/${now:%H.%M.%S}
+  sweep:
+    dir: ./experiments/evaluate_single_task/${task.suite_name}/mixed_datasets
+    subdir: ${seed}/${hydra.job.num}
 
 training:
   use_tqdm: true
