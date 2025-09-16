@@ -124,7 +124,6 @@ class LiberoRunner():
         env._env.close()
         gc.collect()
         del env
-        # TODO: envs are not being closed properly hence getting EGL error
     
     def run_episode(self, env, env_name, policy, init_states_, env_num, render=False):
         obs, info = env.reset(init_states=init_states_)
