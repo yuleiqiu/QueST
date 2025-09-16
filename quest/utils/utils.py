@@ -11,13 +11,7 @@ import warnings
 from natsort import natsorted
 
 def get_experiment_dir(cfg, evaluate=False, allow_overlap=False):
-    # if eval_flag:
-    #     prefix = "evaluations"
-    # else:
-    #     prefix = "experiments"
-    #     if cfg.pretrain_model_path != "":
-    #         prefix += "_finetune"
-
+    """Generate experiment directory and name based on the configuration."""
     prefix = cfg.output_prefix
     if evaluate:
         prefix = os.path.join(prefix, 'evaluate')
@@ -25,6 +19,50 @@ def get_experiment_dir(cfg, evaluate=False, allow_overlap=False):
     experiment_dir = (
         f"{prefix}/{cfg.task.suite_name}/{cfg.task.benchmark_name}/"
         + f"{cfg.algo.name}/{cfg.exp_name}"
+    )
+    if cfg.variant_name is not None:
+        experiment_dir += f'/{cfg.variant_name}'
+    
+    if cfg.seed != 10000:
+        experiment_dir += f'/{cfg.seed}'
+
+    if cfg.make_unique_experiment_dir:
+        # look for the most recent run
+        experiment_id = 0
+        if os.path.exists(experiment_dir):
+            for path in Path(experiment_dir).glob("run_*"):
+                if not path.is_dir():
+                    continue
+                try:
+                    folder_id = int(str(path).split("run_")[-1])
+                    if folder_id > experiment_id:
+                        experiment_id = folder_id
+                except BaseException:
+                    pass
+            experiment_id += 1
+
+        experiment_dir += f"/run_{experiment_id:03d}"
+    else:
+        experiment_dir += f'/stage_{cfg.stage}'
+        
+        if not allow_overlap and not cfg.training.resume:
+            assert not os.path.exists(experiment_dir), \
+                f'cfg.make_unique_experiment_dir=false but {experiment_dir} is already occupied'
+
+    experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
+    return experiment_dir, experiment_name
+
+def get_experiment_dir_for_mixed_datasets(cfg, evaluate=False, allow_overlap=False):
+    """
+    Generate experiment directory and name based on the configuration for mixed datasets.
+    This function is similar to get_experiment_dir but can be customized for mixed datasets.
+    """
+    prefix = cfg.output_prefix
+    if evaluate:
+        prefix = os.path.join(prefix, 'evaluate')
+
+    experiment_dir = (
+        f"{prefix}/{cfg.task.suite_name}/mixed_datasets/{cfg.exp_name}/{cfg.algo.name}"
     )
     if cfg.variant_name is not None:
         experiment_dir += f'/{cfg.variant_name}'
@@ -99,8 +137,6 @@ def get_latest_checkpoint(checkpoint_dir):
     return os.path.join(checkpoint_dir, best_file)
 
 def soft_load_state_dict(model, loaded_state_dict):
-    # loaded_state_dict['task_encoder.weight'] = loaded_state_dict['task_encodings.weight']
-    
     current_model_dict = model.state_dict()
     new_state_dict = {}
 
@@ -138,7 +174,6 @@ def safe_device(x, device="cpu"):
             return x.cpu()
 
 def extract_state_dicts(inp):
-
     if not (isinstance(inp, dict) or isinstance(inp, list)):
         if hasattr(inp, 'state_dict'):
             return inp.state_dict()
