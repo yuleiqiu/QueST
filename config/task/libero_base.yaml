@@ -58,12 +58,12 @@ env_runner:
   env_factory: ${task.env_factory}
   frame_stack: ${algo.frame_stack}
   benchmark_name: ${task.benchmark_name}
-  mode: ${task.mode}
+  # mode: ${task.mode}
   rollouts_per_env: ${rollout.rollouts_per_env}
   num_parallel_envs: ${rollout.num_parallel_envs}
   max_episode_length: ${rollout.max_episode_length}
   fps: 24
-  debug: false
+  # debug: false
   task_embedding_format: ${task.task_embedding_format}
 
 obs_key_mapping:

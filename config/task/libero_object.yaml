@@ -6,4 +6,3 @@ benchmark_name: LIBERO_OBJECT
 mode: all
 n_tasks: 10
 rollouts_per_env: 50
-
