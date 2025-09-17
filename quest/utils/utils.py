@@ -316,8 +316,35 @@ def save_state(state_dict, path):
     save_dict = extract_state_dicts(state_dict)
     torch.save(save_dict, path)
 
-def load_state(path):
-    return torch.load(path)
+def load_state(path: Union[str, os.PathLike], map_location: Optional[Union[str, torch.device]] = None):
+    """Load a checkpoint with optional device remapping.
+
+    Args:
+        path: Path to the checkpoint file.
+        map_location: Optional map location to remap storages. Examples: 'cpu',
+            torch.device('cuda:0'). If None, will try default loading first and
+            fall back to CPU on CUDA device mismatch.
+
+    Returns:
+        The object loaded by torch.load.
+    """
+    try:
+        if map_location is not None:
+            return torch.load(path, map_location=map_location)
+        return torch.load(path)
+    except RuntimeError as e:
+        # Common when a checkpoint was saved on cuda:1 but only cuda:0 exists now
+        msg = str(e)
+        if (
+            'Attempting to deserialize object on CUDA device' in msg
+            or 'Invalid device id' in msg
+            or 'CUDA error' in msg
+        ):
+            warnings.warn(
+                f"Falling back to CPU map_location for loading '{path}' due to: {e}"
+            )
+            return torch.load(path, map_location='cpu')
+        raise
 
 def torch_save_model(model, optimizer, scheduler, model_path, cfg=None):
     torch.save(

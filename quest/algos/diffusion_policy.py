@@ -6,13 +6,8 @@ from diffusers.training_utils import EMAModel
 from quest.algos.base import ChunkPolicy
 
 class DiffusionPolicy(ChunkPolicy):
-    def __init__(
-            self, 
-            diffusion_model,
-            **kwargs
-            ):
+    def __init__(self, diffusion_model, **kwargs):
         super().__init__(**kwargs)
-        
         self.diffusion_model = diffusion_model.to(self.device)
 
     def compute_loss(self, data):
@@ -38,6 +33,33 @@ class DiffusionPolicy(ChunkPolicy):
         cond = torch.cat([obs_emb, lang_emb], dim=-1)
         return cond
     
+#TODO: may need to apply to other algos too
+def _resolve_device(device):
+    """Return a valid torch.device from a string/torch.device, with safe fallbacks.
+
+    - If CUDA not available, return CPU.
+    - If CUDA index is out of range, fall back to cuda:0 (if available) else CPU.
+    """
+    import warnings
+    if isinstance(device, torch.device):
+        dev = device
+    else:
+        dev = torch.device(device)
+    if dev.type == 'cuda':
+        if not torch.cuda.is_available():
+            warnings.warn("CUDA requested but not available; falling back to CPU")
+            return torch.device('cpu')
+        idx = dev.index if dev.index is not None else 0
+        count = torch.cuda.device_count()
+        if idx is None:
+            idx = 0
+        if idx < 0 or idx >= count:
+            warnings.warn(
+                f"Requested CUDA device index {idx} out of range (count={count}); using cuda:0"
+            )
+            return torch.device('cuda:0') if count > 0 else torch.device('cpu')
+    return dev
+
 
 class DiffusionModel(nn.Module):
     def __init__(self, 
@@ -51,7 +73,8 @@ class DiffusionModel(nn.Module):
                  diffusion_inf_steps,
                  device):
         super().__init__()
-        self.device = device
+        # Resolve device to a valid torch.device with safe fallbacks
+        self.device = _resolve_device(device)
         net = ConditionalUnet1D(
             input_dim=action_dim,
             global_cond_dim=global_cond_dim,

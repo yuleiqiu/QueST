@@ -103,15 +103,29 @@ def load_model_from_checkpoint(config: DictConfig, checkpoint_path: Optional[str
         print(f"Loading checkpoint from: {config.checkpoint_dir}")
         checkpoint_path = utils.get_checkpoint_with_selection(config.checkpoint_dir)
 
-    # Load model state
-    state_dict = utils.load_state(checkpoint_path)
+    # Load model state, remapping storages to the target device
+    device_str = str(config.device)
+    map_location = 'cpu' if device_str.lower().startswith('cpu') else device_str
+    state_dict = utils.load_state(checkpoint_path, map_location=map_location)
     
     # Create model based on saved config or provided config
     if 'config' in state_dict:
         print('Auto-loading model based on saved parameters')
         policy_config_from_model = state_dict['config']['algo']['policy']
-        # pprint(policy_config_from_model)
-        # pdb.set_trace()
+        # Ensure device from current runtime overrides any saved device (e.g., cuda:1)
+        try:
+            if isinstance(policy_config_from_model, dict):
+                # Top-level policy device
+                if 'device' in policy_config_from_model:
+                    policy_config_from_model['device'] = str(config.device)
+                # Common nested module devices
+                for subkey in ['diffusion_model', 'encoder', 'vision_encoder', 'policy', 'actor', 'critic']:
+                    if subkey in policy_config_from_model and isinstance(policy_config_from_model[subkey], dict):
+                        if 'device' in policy_config_from_model[subkey]:
+                            policy_config_from_model[subkey]['device'] = str(config.device)
+        except Exception:
+            # Non-fatal: if structure is unexpected, we'll still set after instantiation via model.to()
+            pass
         model = hydra.utils.instantiate(
             policy_config_from_model, 
             shape_meta=config.task.shape_meta
@@ -210,7 +224,7 @@ def main(config: DictConfig):
     OmegaConf.resolve(config)
 
     # Create save directory
-    save_dir, _ = utils.get_experiment_dir(config, evaluate=True)
+    save_dir, _ = utils.get_experiment_dir_for_mixed_dataset(config, evaluate=True)
     os.makedirs(save_dir, exist_ok=True)
     print('Saving to:', save_dir)
 
