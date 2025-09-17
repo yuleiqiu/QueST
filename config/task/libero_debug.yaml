@@ -1,0 +1,19 @@
+defaults:
+  - libero_base
+  - _self_
+
+benchmark_name: LIBERO_SPATIAL
+mode: all
+rollouts_per_env: 10
+
+env_runner:
+  _target_: quest.env_runner.libero_runner.LiberoSelectedTaskRunner
+  env_factory: ${task.env_factory}
+  benchmark_name: ${task.benchmark_name}
+  task_ids: [0,1,2,3,4]
+  rollouts_per_env: ${rollout.rollouts_per_env}
+  num_parallel_envs: ${rollout.num_parallel_envs}
+  max_episode_length: ${rollout.max_episode_length}
+  frame_stack: ${algo.frame_stack}
+  fps: 24
+  task_embedding_format: ${task.task_embedding_format}
