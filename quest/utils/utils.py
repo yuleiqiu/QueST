@@ -183,31 +183,51 @@ def get_experiment_dir_for_mixed_dataset(
     experiment_name = rel_path.replace(os.sep, '_')
     return experiment_dir, experiment_name
 
-def get_checkpoint_with_selection(checkpoint_dir: Union[str, os.PathLike[str]]) -> Optional[str]:
-    """Select a checkpoint file interactively from a directory.
-
-    If ``checkpoint_dir`` points to a file, it is returned immediately. If it
-    points to a directory, the files inside are listed (natural sort), printed,
-    and the user is prompted to select one.
-
-    Args:
-        checkpoint_dir (str | os.PathLike):
-            Path to a checkpoint file, or to a directory containing checkpoint files.
-
-    Returns:
-        Optional[str]:
-            Full path to the selected checkpoint file (as provided, not necessarily
-            absolute), or ``None`` if the selection is cancelled via keyboard
-            interrupt (Ctrl-C).
-
-    Raises:
-        FileNotFoundError: If ``checkpoint_dir`` does not exist.
-        ValueError: If ``checkpoint_dir`` is a directory but contains no files.
+def get_experiment_dir_for_mixed_datasets(cfg, evaluate=False, allow_overlap=False):
     """
-    # Normalize PathLike to string for consistent operations
-    checkpoint_dir = os.fspath(checkpoint_dir)
+    Generate experiment directory and name based on the configuration for mixed datasets.
+    This function is similar to get_experiment_dir but can be customized for mixed datasets.
+    """
+    prefix = cfg.output_prefix
+    if evaluate:
+        prefix = os.path.join(prefix, 'evaluate')
 
-    # If a file path is provided, return it as-is
+    experiment_dir = (
+        f"{prefix}/{cfg.task.suite_name}/mixed_datasets/{cfg.exp_name}/{cfg.algo.name}"
+    )
+    if cfg.variant_name is not None:
+        experiment_dir += f'/{cfg.variant_name}'
+    
+    if cfg.seed != 10000:
+        experiment_dir += f'/{cfg.seed}'
+
+    if cfg.make_unique_experiment_dir:
+        # look for the most recent run
+        experiment_id = 0
+        if os.path.exists(experiment_dir):
+            for path in Path(experiment_dir).glob("run_*"):
+                if not path.is_dir():
+                    continue
+                try:
+                    folder_id = int(str(path).split("run_")[-1])
+                    if folder_id > experiment_id:
+                        experiment_id = folder_id
+                except BaseException:
+                    pass
+            experiment_id += 1
+
+        experiment_dir += f"/run_{experiment_id:03d}"
+    else:
+        experiment_dir += f'/stage_{cfg.stage}'
+        
+        if not allow_overlap and not cfg.training.resume:
+            assert not os.path.exists(experiment_dir), \
+                f'cfg.make_unique_experiment_dir=false but {experiment_dir} is already occupied'
+
+    experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
+    return experiment_dir, experiment_name
+
+def get_checkpoint_with_selection(checkpoint_dir):
     if os.path.isfile(checkpoint_dir):
         return checkpoint_dir
 
@@ -256,8 +276,6 @@ def get_latest_checkpoint(checkpoint_dir):
     return os.path.join(checkpoint_dir, best_file)
 
 def soft_load_state_dict(model, loaded_state_dict):
-    # loaded_state_dict['task_encoder.weight'] = loaded_state_dict['task_encodings.weight']
-    
     current_model_dict = model.state_dict()
     new_state_dict = {}
 
@@ -295,7 +313,6 @@ def safe_device(x, device="cpu"):
             return x.cpu()
 
 def extract_state_dicts(inp):
-
     if not (isinstance(inp, dict) or isinstance(inp, list)):
         if hasattr(inp, 'state_dict'):
             return inp.state_dict()

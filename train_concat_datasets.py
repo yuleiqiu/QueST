@@ -35,7 +35,7 @@ def main(cfg):
     schedulers = model.get_schedulers(optimizers)
     scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
 
-    experiment_dir, experiment_name = utils.get_experiment_dir_for_mixed_dataset(cfg)
+    experiment_dir, experiment_name = utils.get_experiment_dir_for_mixed_datasets(cfg)
     os.makedirs(experiment_dir, exist_ok=True)
 
     start_epoch, steps, wandb_id = 0, 0, None
