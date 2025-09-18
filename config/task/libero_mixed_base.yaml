@@ -10,8 +10,8 @@ defaults:
 
 suite_name: libero
 mode: fewshot
-  # Note: benchmark_name/n_demos/task_ids now live inside
-  #       `task.dataset_grid` and `task.dataset_random` respectively.
+# Note: benchmark_name/n_demos/task_ids now live inside
+#       `task.dataset_grid` and `task.dataset_random` respectively.
 
 task_embedding_format: clip
 img_height: 128
@@ -57,15 +57,14 @@ env_factory:
   device: ${device}
 
 env_runner:
-  _target_: quest.env_runner.libero_runner.LiberoRunner
+  _target_: quest.env_runner.libero_runner.LiberoSelectedTaskRunner
   env_factory: ${task.env_factory}
-  frame_stack: ${algo.frame_stack}
   # Runner uses the grid dataset's benchmark by default; override if needed via CLI
   benchmark_name: ${task.dataset_grid.benchmark_name}
-  mode: ${task.mode}
+  task_ids: ${task.dataset_grid.task_ids} # list of task ids to run
   rollouts_per_env: ${rollout.rollouts_per_env}
   num_parallel_envs: ${rollout.num_parallel_envs}
   max_episode_length: ${rollout.max_episode_length}
+  frame_stack: ${algo.frame_stack}
   fps: 24
-  debug: false
   task_embedding_format: ${task.task_embedding_format}
