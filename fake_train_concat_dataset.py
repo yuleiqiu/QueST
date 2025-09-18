@@ -54,7 +54,7 @@ def main(cfg):
 
     scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
 
-    experiment_dir, experiment_name = utils.get_experiment_dir_for_mixed_dataset(cfg)
+    experiment_dir, experiment_name = utils.get_experiment_dir_for_mixed_datasets(cfg)
     print(f"Experiment dir: {experiment_dir}")
     print(f"Experiment name: {experiment_name}")
     breakpoint()
@@ -120,7 +120,7 @@ def main(cfg):
         print("Structure of a batch:")
         print_data_structure(data)
         break
-    # breakpoint()
+    breakpoint()
 
 
     """
