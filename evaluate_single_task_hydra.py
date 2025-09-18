@@ -1,85 +1,11 @@
 #!/usr/bin/env python3
-"""
-Single Task Evaluation Script for LiberoSingleTaskRunner using Hydra.
-
-This script evaluates a trained checkpoint on a single specific task from a Libero benchmark,
-leveraging the existing hydra configuration system.
-
-To use this script, you should create a YAML configuration file for your single-task evaluation.
-You can create a file `config/evaluate_single_task_custom.yaml` with the following content:
-
-```yaml
-# config/evaluate_single_task_custom.yaml
-defaults:
-  - _self_
-  - override hydra/launcher: submitit_local
-
-hydra:
-  run:
-    dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}/${now:%Y.%m.%d}/${now:%H.%M.%S}
-  sweep:
-    dir: ./experiments/evaluate_single_task/${task.benchmark_name}_task${task.task_id}
-    subdir: ${hydra.job.num}
-
-# General settings
-device: cuda:0
-seed: 42
-checkpoint_path: /path/to/your/checkpoint.pth # IMPORTANT: Change this path
-
-# Task specific configuration
-task:
-  suite_name: libero
-  benchmark_name: LIBERO_10 # e.g., LIBERO_10, LIBERO_OBJECT
-  task_id: 0 # The ID of the task you want to evaluate
-  img_height: 128
-  img_width: 128
-  horizon: 500
-  task_embedding_format: clip
-  shape_meta:
-    action_dim: 7
-    observation:
-      rgb:
-        agentview_rgb: [3, 128, 128]
-        eye_in_hand_rgb: [3, 128, 128]
-      lowdim:
-        joint_states: 7
-        ee_pos: 3
-        gripper_states: 2
-    task:
-      type: vector
-      dim: 512
-  obs_key_mapping:
-    agentview_rgb: 'agentview_image'
-    eye_in_hand_rgb: 'robot0_eye_in_hand_image'
-    gripper_states: 'robot0_gripper_qpos'
-    joint_states: 'robot0_joint_pos'
-    ee_pos: 'robot0_eef_pos'
-
-# Rollout settings
-rollout:
-  rollouts_per_env: 20
-  num_parallel_envs: 1
-  max_episode_length: 500
-  n_video: 3
-  fps: 24
-  debug: false
-
-```
-
-Then, you can run the evaluation with:
-    python evaluate_single_task_hydra.py --config-name=evaluate_single_task_custom.yaml
-
-"""
 
 import functools
 import json
 import os
-import pdb
 import time
-import types
 from typing import List, Optional
 import fnmatch
-from pprint import pprint
 
 import hydra
 import torch
@@ -88,7 +14,7 @@ from omegaconf import DictConfig, OmegaConf
 
 import quest.utils.libero_utils as lu
 import quest.utils.utils as utils
-from quest.env_runner.libero_runner import LiberoSingleTaskRunner
+from quest.env_runner.libero_runner import LiberoSelectedTaskRunner
 
 
 def load_model_from_checkpoint(config: DictConfig, checkpoint_path: Optional[str] = None):
@@ -174,7 +100,25 @@ def list_checkpoints(checkpoint_dir: str, pattern: Optional[str] = None) -> List
 
 def create_env_runner(config):
     """
-    Create LiberoSingleTaskRunner
+    Build and return a LiberoSelectedTaskRunner configured from the Hydra config.
+
+    Args:
+        config (DictConfig): Resolved config providing:
+            - task.shape_meta, task.obs_key_mapping: Observation/action spec for LiberoWrapper.
+            - task.img_height, task.img_width (int): Camera image resolution for env frames.
+            - device (str|torch.device): Device to place env tensors/policy.
+            - task.benchmark_name (str): LIBERO benchmark identifier.
+            - task.task_id (int): Index of the single task to evaluate within the benchmark.
+            - task.task_embedding_format (str|None): How the task embedding is provided to the policy.
+            - rollout.rollouts_per_env (int): Number of rollouts to run per parallel env.
+            - rollout.num_parallel_envs (int): Number of environments to run in parallel.
+            - rollout.max_episode_length (int): Max steps per episode.
+            - rollout.fps (int): Frames-per-second used for rendering/saving videos.
+
+    Returns:
+        LiberoSelectedTaskRunner: Runner wired with an env_factory that creates
+        quest.utils.libero_utils.LiberoWrapper. Intended to be
+        reused across one or multiple checkpoint evaluations.
     """
     env_factory = functools.partial(
         lu.LiberoWrapper,
@@ -184,17 +128,34 @@ def create_env_runner(config):
         img_width=config.task.img_width,
         device=config.device,
     )
-    
-    runner = LiberoSingleTaskRunner(
+
+    # Ensure task_ids is a list[int] (supports single int or iterable like OmegaConf ListConfig)
+    task_ids_cfg = config.task.task_id
+    if isinstance(task_ids_cfg, int):
+        task_ids_list = [task_ids_cfg]
+    else:
+        # Accept any non-string iterable (e.g., OmegaConf ListConfig) and coerce to list
+        if isinstance(task_ids_cfg, (str, bytes)):
+            raise TypeError(f"config.task.task_id must be an int or a sequence of ints, got string: {task_ids_cfg}")
+        try:
+            task_ids_list = list(task_ids_cfg)
+        except TypeError:
+            raise TypeError(f"config.task.task_id must be int or sequence of ints, got: {type(task_ids_cfg)}")
+    # Validate and coerce elements to int
+    try:
+        task_ids_list = [int(t) for t in task_ids_list]
+    except (TypeError, ValueError):
+        raise TypeError("All elements of config.task.task_id must be integers or coercible to int")
+
+    runner = LiberoSelectedTaskRunner(
         env_factory=env_factory,
         benchmark_name=config.task.benchmark_name,
-        task_id=config.task.task_id,
+        task_ids=task_ids_list,
         rollouts_per_env=config.rollout.rollouts_per_env,
         num_parallel_envs=config.rollout.num_parallel_envs,
         max_episode_length=config.rollout.max_episode_length,
-        frame_stack=1,
+        frame_stack=config.algo.frame_stack,
         fps=config.rollout.fps,
-        debug=config.rollout.debug,
         task_embedding_format=config.task.task_embedding_format
     )
     
@@ -240,18 +201,17 @@ def main(config: DictConfig):
     # Create environment runner once; reuse across checkpoints
     env_runner = create_env_runner(config)
     
-    # Get task name for display
-    benchmark = lu.get_benchmark(config.task.benchmark_name)()
-    task_name = benchmark.get_task_names()[config.task.task_id]
+    # Selected task names (supports multiple task ids)
+    # Will be available after runner is created
     
-    print(f"\n=== Single Task Evaluation (Hydra) ===")
-    print(f"Benchmark: {config.task.benchmark_name}")
-    print(f"Task ID: {config.task.task_id}")
-    print(f"Task Name: {task_name}")
-    print(f"Rollouts per env: {config.rollout.rollouts_per_env}")
-    print(f"Number of videos: {config.rollout.n_video}")
-    print(f"Device: {config.device}")
-    print("=" * 40)
+    # print(f"\n=== Single Task Evaluation (Hydra) ===")
+    # print(f"Benchmark: {config.task.benchmark_name}")
+    # print(f"Task ID: {config.task.task_id}")
+    # print(f"Task Name: {task_name}")
+    # print(f"Rollouts per env: {config.rollout.rollouts_per_env}")
+    # print(f"Number of videos: {config.rollout.n_video}")
+    # print(f"Device: {config.device}")
+    # print("=" * 40)
     
     if eval_all and os.path.isdir(config.checkpoint_dir):
         print("Evaluating ALL checkpoints in directory...")
@@ -260,6 +220,7 @@ def main(config: DictConfig):
             raise ValueError(f"No checkpoints found in {config.checkpoint_dir} with pattern: {pattern or '*.pth|*.pt'}")
 
         summary = []
+        selected_task_names = env_runner.env_names
         for i, ckpt_path in enumerate(checkpoints, 1):
             ckpt_name = os.path.splitext(os.path.basename(ckpt_path))[0]
             ckpt_save_dir = os.path.join(save_dir, ckpt_name)
@@ -287,7 +248,7 @@ def main(config: DictConfig):
                 'checkpoint': ckpt_path,
                 'results': rollout_results,
                 'evaluation_time': evaluation_time,
-                'task_name': task_name,
+                'task_names': selected_task_names,
             }
             results_file = os.path.join(ckpt_save_dir, 'results.json')
             with open(results_file, 'w') as f:
@@ -304,7 +265,7 @@ def main(config: DictConfig):
                 'overall_success_rate': rollout_results['rollout']['overall_success_rate'],
                 'overall_average_reward': rollout_results['rollout']['overall_average_reward'],
                 'environments_solved': rollout_results['rollout']['environments_solved'],
-                'task_success_rate': rollout_results['rollout_success_rate'].get(task_name, None),
+                'task_success_rates': {name: rollout_results['rollout_success_rate'].get(name, None) for name in selected_task_names},
                 'evaluation_time_sec': evaluation_time,
             })
 
@@ -320,7 +281,7 @@ def main(config: DictConfig):
         summary_path = os.path.join(save_dir, 'summary.json')
         with open(summary_path, 'w') as f:
             json.dump({
-                'task_name': task_name,
+                'task_names': selected_task_names,
                 'num_checkpoints': len(summary),
                 'checkpoints': summary,
             }, f, indent=2)
@@ -334,7 +295,7 @@ def main(config: DictConfig):
         def save_video_callback_fn(video_chw, env_name, idx):
             save_video_fn(video_chw, env_name, idx, save_dir, config.rollout.fps)
 
-        # Run evaluation
+    # Run evaluation
         print("Running evaluation...")
         start_time = time.time()
 
@@ -352,8 +313,12 @@ def main(config: DictConfig):
         print(f"Success Rate: {rollout_results['rollout']['overall_success_rate']:.3f}")
         print(f"Average Reward: {rollout_results['rollout']['overall_average_reward']:.3f}")
         print(f"Environments Solved: {rollout_results['rollout']['environments_solved']}")
-        if task_name in rollout_results['rollout_success_rate']:
-            print(f"Task-specific Success Rate: {rollout_results['rollout_success_rate'][task_name]:.3f}")
+        selected_task_names = env_runner.env_names
+        if 'rollout_success_rate' in rollout_results and isinstance(rollout_results['rollout_success_rate'], dict):
+            print("Per-task Success Rates:")
+            for name in selected_task_names:
+                if name in rollout_results['rollout_success_rate']:
+                    print(f" - {name}: {rollout_results['rollout_success_rate'][name]:.3f}")
         print(f"Evaluation Time: {evaluation_time:.2f} seconds")
 
         # Save results
@@ -361,7 +326,7 @@ def main(config: DictConfig):
             'args': OmegaConf.to_container(config),
             'results': rollout_results,
             'evaluation_time': evaluation_time,
-            'task_name': task_name
+            'task_names': selected_task_names
         }
 
         results_file = os.path.join(save_dir, 'results.json')
